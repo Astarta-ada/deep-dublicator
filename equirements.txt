@@ -1,0 +1,11 @@
+PySide6>=6.6
+send2trash>=1.8
+Pillow>=10.0
+pillow-heif>=0.14
+pypdfium2>=4.25
+imagehash>=4.3
+squarify>=0.4
+APScheduler>=3.10
+psutil>=5.9.0
+mutagen>=1.47
+opencv-python-headless>=4.8

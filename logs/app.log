@@ -1,0 +1,345 @@
+2026-10-11 20:21:42 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-11 20:21:42 | INFO    | __main__                 | === Запуск приложения ===
+2026-10-11 20:21:42 | INFO    | gui.main_window          | Главное окно создано
+2026-10-11 20:22:03 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=1, max=None, empty=False
+2026-10-11 20:22:03 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 2
+2026-10-11 20:22:03 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 2
+2026-10-11 20:22:03 | INFO    | core.duplicate_finder    | Итог: 1 групп дубликатов
+2026-10-11 20:22:03 | INFO    | gui.scan_tab             | Найдено групп: 1, файлов: 2
+2026-10-11 20:25:12 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-11 20:31:01 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-11 20:31:01 | INFO    | __main__                 | === Запуск приложения ===
+2026-10-11 20:31:02 | INFO    | gui.main_window          | Главное окно создано
+2026-10-11 20:31:17 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=1, max=None, empty=False
+2026-10-11 20:31:17 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 2
+2026-10-11 20:31:17 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 2
+2026-10-11 20:31:17 | INFO    | core.duplicate_finder    | Итог: 1 групп дубликатов
+2026-10-11 23:28:56 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-16 19:22:37 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-16 19:22:37 | INFO    | __main__                 | === Запуск приложения ===
+2026-10-16 19:22:38 | INFO    | gui.main_window          | Главное окно создано
+2026-10-16 19:23:19 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=0, max=None, empty=True
+2026-10-16 19:23:19 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 2
+2026-10-16 19:23:19 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 2
+2026-10-16 19:23:19 | INFO    | core.duplicate_finder    | Итог: 1 групп дубликатов
+2026-10-16 19:23:19 | INFO    | gui.scan_tab             | Найдено групп: 1, файлов: 2
+2026-10-16 19:26:16 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-16 19:26:16 | INFO    | __main__                 | === Запуск приложения ===
+2026-10-16 19:26:16 | INFO    | gui.main_window          | Главное окно создано
+2026-10-16 19:26:26 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=0, max=None, empty=True
+2026-10-16 19:26:26 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 2
+2026-10-16 19:26:26 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 2
+2026-10-16 19:26:26 | INFO    | core.duplicate_finder    | Итог: 1 групп дубликатов
+2026-10-16 19:26:26 | INFO    | gui.scan_tab             | Найдено групп: 1, файлов: 2
+2026-10-16 19:26:43 | INFO    | core.file_ops            | Симлинк: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\tets.txt → E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка\tets.txt
+2026-10-16 19:26:43 | INFO    | gui.scan_tab             | Действие 'symlink': обработано 1, ошибок 0
+2026-10-16 19:26:51 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=0, max=None, empty=True
+2026-10-16 19:26:51 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 0
+2026-10-16 19:26:51 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 0
+2026-10-16 19:26:51 | INFO    | core.duplicate_finder    | Итог: 0 групп дубликатов
+2026-10-16 19:42:31 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-16 19:42:31 | INFO    | __main__                 | === Запуск приложения ===
+2026-10-16 19:46:14 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-16 19:46:14 | INFO    | __main__                 | === Запуск приложения ===
+2026-10-16 19:46:14 | INFO    | gui.theme_manager        | Тема применена: light_blue
+2026-10-16 19:46:53 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-16 19:46:53 | INFO    | __main__                 | === Запуск приложения ===
+2026-10-16 19:46:53 | INFO    | gui.theme_manager        | Тема применена: light_blue
+2026-10-16 19:46:54 | INFO    | gui.main_window          | Главное окно создано
+2026-10-16 19:47:12 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator, ext=set(), min=0, max=None, empty=True
+2026-10-16 19:47:12 | INFO    | core.duplicate_finder    | Найдено пустых файлов: 35
+2026-10-16 19:47:12 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 2437
+2026-10-16 19:47:28 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 991
+2026-10-16 19:47:28 | INFO    | core.duplicate_finder    | Итог: 289 групп дубликатов
+2026-10-16 19:47:28 | INFO    | gui.scan_tab             | Найдено групп: 289, файлов: 1006
+2026-10-16 20:02:18 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Фотокамера, ext={'.tiff', '.gif', '.webp', '.bmp', '.heic', '.jpg', '.jpeg', '.png'}, min=0, max=None, empty=True
+2026-10-16 20:02:22 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 11481
+2026-10-16 20:03:50 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 11380
+2026-10-16 20:04:59 | INFO    | core.duplicate_finder    | Итог: 4647 групп дубликатов
+2026-10-16 20:04:59 | INFO    | gui.scan_tab             | Найдено групп: 4647, файлов: 11380
+2026-10-16 20:38:11 | INFO    | core.session             | Сессия сохранена: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\session_20261016_203757.dupsession.json (4647 групп)
+2026-10-16 20:38:32 | INFO    | core.reports             | HTML-отчёт сохранён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\report_20261016_203824.html
+2026-10-16 20:38:50 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-16 20:39:15 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-16 20:39:15 | INFO    | __main__                 | === Запуск приложения ===
+2026-10-16 20:39:15 | INFO    | gui.theme_manager        | Тема применена: light_blue
+2026-10-16 20:39:17 | INFO    | gui.main_window          | Главное окно создано
+2026-10-16 20:39:27 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=1, max=None, empty=False
+2026-10-16 20:39:27 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 0
+2026-10-16 20:39:27 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 0
+2026-10-16 20:39:27 | INFO    | core.duplicate_finder    | Итог: 0 групп дубликатов
+2026-10-16 20:40:22 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-16 20:41:38 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-16 20:41:38 | INFO    | __main__                 | === Запуск приложения ===
+2026-10-16 20:41:38 | INFO    | gui.theme_manager        | Тема применена: light_blue
+2026-10-16 20:41:38 | INFO    | gui.main_window          | Главное окно создано
+2026-10-16 20:41:53 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=0, max=None, empty=True
+2026-10-16 20:41:53 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 9
+2026-10-16 20:41:53 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 9
+2026-10-16 20:41:53 | INFO    | core.duplicate_finder    | Итог: 2 групп дубликатов
+2026-10-16 20:41:53 | INFO    | gui.scan_tab             | Найдено групп: 2, файлов: 9
+2026-10-16 20:47:14 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-17 17:44:47 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 17:44:47 | INFO    | __main__                 | === Запуск приложения ===
+2026-10-17 17:44:47 | INFO    | gui.theme_manager        | Тема применена: light_blue
+2026-10-17 17:44:48 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 17:44:58 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=1, max=None, empty=False
+2026-10-17 17:44:58 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 9
+2026-10-17 17:44:59 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 9
+2026-10-17 17:44:59 | INFO    | core.duplicate_finder    | Итог: 2 групп дубликатов
+2026-10-17 17:44:59 | INFO    | gui.scan_tab             | Найдено групп: 2, файлов: 9
+2026-10-17 17:45:29 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\ывафыв — копия.txt
+2026-10-17 17:45:29 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\ывафыв.txt
+2026-10-17 17:45:29 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка — копия\tets.txt
+2026-10-17 17:45:29 | INFO    | gui.scan_tab             | Действие 'delete': обработано 3, ошибок 0
+2026-10-17 17:45:32 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=1, max=None, empty=False
+2026-10-17 17:45:32 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 6
+2026-10-17 17:45:32 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 6
+2026-10-17 17:45:32 | INFO    | core.duplicate_finder    | Итог: 2 групп дубликатов
+2026-10-17 17:45:32 | INFO    | gui.scan_tab             | Найдено групп: 2, файлов: 6
+2026-10-17 17:45:42 | INFO    | core.session             | Сессия загружена: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\session_20261016_203757.dupsession.json (4647 групп)
+2026-10-17 18:02:41 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 18:02:41 | INFO    | __main__                 | === Запуск CLI ===
+2026-10-17 18:02:41 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 6
+2026-10-17 18:02:41 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 6
+2026-10-17 18:02:41 | INFO    | core.duplicate_finder    | Итог: 2 групп дубликатов
+2026-10-17 18:02:58 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 18:02:58 | INFO    | __main__                 | === Запуск CLI ===
+2026-10-17 18:02:58 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 6
+2026-10-17 18:02:58 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 6
+2026-10-17 18:02:58 | INFO    | core.duplicate_finder    | Итог: 2 групп дубликатов
+2026-10-17 18:03:37 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 18:03:37 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 18:03:38 | INFO    | gui.theme_manager        | Тема применена: light_blue
+2026-10-17 18:03:39 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 18:04:09 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=1, max=None, empty=False, cache=True
+2026-10-17 18:04:09 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 6
+2026-10-17 18:04:09 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 6
+2026-10-17 18:04:09 | INFO    | core.duplicate_finder    | Итог: 2 групп дубликатов
+2026-10-17 18:04:09 | INFO    | gui.scan_tab             | Найдено групп: 2, файлов: 6
+2026-10-17 18:04:15 | INFO    | core.reports             | Список на удаление сохранён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\delete_20261017_180410.txt (4 файлов)
+2026-10-17 18:06:28 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-17 18:09:03 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 18:09:03 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 18:09:03 | INFO    | gui.theme_manager        | Тема применена: light_blue
+2026-10-17 18:09:03 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 18:09:38 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-17 18:09:43 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 18:09:43 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 18:09:43 | INFO    | gui.theme_manager        | Тема применена: light_blue
+2026-10-17 18:09:43 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 18:09:52 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=1, max=None, empty=False, cache=True
+2026-10-17 18:09:52 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 6
+2026-10-17 18:09:52 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 6
+2026-10-17 18:09:52 | INFO    | core.duplicate_finder    | Итог: 2 групп дубликатов
+2026-10-17 18:09:52 | INFO    | gui.scan_tab             | Найдено групп: 2, файлов: 6
+2026-10-17 18:10:05 | INFO    | gui.scan_tab             | Авто-выбор оригинала: oldest
+2026-10-17 18:10:33 | INFO    | core.session             | Сессия загружена: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\session_20261016_203757.dupsession.json (4647 групп)
+2026-10-17 18:28:45 | INFO    | gui.theme_manager        | Тема применена: light_emerald
+2026-10-17 18:30:46 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 18:30:46 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 18:30:46 | INFO    | gui.theme_manager        | Тема применена: light_emerald
+2026-10-17 18:30:46 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 18:30:50 | INFO    | gui.theme_manager        | Тема применена: light_violet
+2026-10-17 18:30:53 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 18:31:03 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=1, max=None, empty=False, cache=True
+2026-10-17 18:31:03 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 6
+2026-10-17 18:31:03 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 6
+2026-10-17 18:31:03 | INFO    | core.duplicate_finder    | Итог: 2 групп дубликатов
+2026-10-17 18:31:03 | INFO    | gui.scan_tab             | Найдено групп: 2, файлов: 6
+2026-10-17 18:33:34 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-17 18:43:10 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 18:43:10 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 18:43:10 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 18:43:10 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 18:44:18 | INFO    | gui.theme_manager        | Тема применена: light_blue
+2026-10-17 18:44:21 | INFO    | gui.theme_manager        | Тема применена: light_emerald
+2026-10-17 18:44:29 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=1, max=None, empty=False, cache=True
+2026-10-17 18:44:29 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 6
+2026-10-17 18:44:29 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 6
+2026-10-17 18:44:29 | INFO    | core.duplicate_finder    | Итог: 2 групп дубликатов
+2026-10-17 18:44:29 | INFO    | gui.scan_tab             | Найдено групп: 2, файлов: 6
+2026-10-17 18:45:39 | INFO    | gui.scan_tab             | Авто-выбор оригинала: oldest
+2026-10-17 18:45:41 | INFO    | gui.scan_tab             | Авто-выбор оригинала: newest
+2026-10-17 18:45:43 | INFO    | gui.scan_tab             | Авто-выбор оригинала: shortest
+2026-10-17 18:45:45 | INFO    | gui.scan_tab             | Авто-выбор оригинала: longest
+2026-10-17 18:45:47 | INFO    | gui.scan_tab             | Авто-выбор оригинала: newest
+2026-10-17 18:45:49 | INFO    | gui.scan_tab             | Авто-выбор оригинала: oldest
+2026-10-17 18:57:37 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 18:57:37 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 18:57:37 | INFO    | gui.theme_manager        | Тема применена: light_emerald
+2026-10-17 18:57:38 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 18:57:40 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=1, max=None, empty=False, cache=True
+2026-10-17 18:57:40 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 6
+2026-10-17 18:57:40 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 6
+2026-10-17 18:57:40 | INFO    | core.duplicate_finder    | Итог: 2 групп дубликатов
+2026-10-17 18:57:40 | INFO    | gui.scan_tab             | Найдено групп: 2, файлов: 6
+2026-10-17 18:58:09 | INFO    | gui.scan_tab             | Авто-выбор оригинала: newest
+2026-10-17 18:58:11 | INFO    | gui.scan_tab             | Авто-выбор оригинала: shortest
+2026-10-17 18:58:13 | INFO    | gui.scan_tab             | Авто-выбор оригинала: oldest
+2026-10-17 18:59:44 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-17 19:01:50 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 19:01:50 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 19:01:51 | INFO    | gui.theme_manager        | Тема применена: light_emerald
+2026-10-17 19:01:51 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 19:01:53 | INFO    | gui.scan_tab             | Скан: root=E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test, ext=set(), min=1, max=None, empty=False, cache=True
+2026-10-17 19:01:53 | INFO    | core.duplicate_finder    | Кандидатов после фильтра по размеру: 6
+2026-10-17 19:01:53 | INFO    | core.duplicate_finder    | Кандидатов после быстрого хеша: 6
+2026-10-17 19:01:53 | INFO    | core.duplicate_finder    | Итог: 2 групп дубликатов
+2026-10-17 19:01:53 | INFO    | gui.scan_tab             | Найдено групп: 2, файлов: 6
+2026-10-17 19:02:07 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 19:08:17 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-17 19:16:48 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 19:16:48 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 19:16:48 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 19:16:48 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-17 19:16:48 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-17 19:16:48 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-17 19:16:49 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 19:20:35 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 19:20:35 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 19:20:35 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 19:20:35 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-17 19:20:35 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-17 19:20:35 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-17 19:20:35 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 19:23:52 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 19:23:52 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 19:23:52 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 19:23:52 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-17 19:23:52 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-17 19:23:52 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-17 19:23:52 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 19:25:48 | INFO    | core.file_ops            | Удалена пустая папка: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка — копия
+2026-10-17 20:06:16 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 20:06:16 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 20:06:16 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 20:06:16 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-17 20:06:16 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-17 20:06:16 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-17 20:06:16 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 20:15:48 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 20:15:48 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 20:15:48 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 20:15:48 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-17 20:15:48 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-17 20:15:48 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-17 20:15:49 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 20:18:55 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 20:18:55 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 20:18:55 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 20:18:55 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-17 20:18:55 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-17 20:18:55 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-17 20:18:56 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 20:20:14 | INFO    | apscheduler.scheduler    | Scheduler has been shut down
+2026-10-17 20:20:14 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-17 20:21:52 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 20:21:52 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 20:21:52 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 20:21:52 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-17 20:21:52 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-17 20:21:52 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-17 20:21:52 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 20:23:00 | INFO    | apscheduler.scheduler    | Scheduler has been shut down
+2026-10-17 20:23:00 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-17 23:28:41 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 23:28:41 | INFO    | __main__                 | === Запуск GUI ===
+2026-10-17 23:28:41 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 23:28:41 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-17 23:28:41 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-17 23:28:41 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-17 23:28:42 | INFO    | gui.main_window          | Главное окно создано
+2026-10-17 23:36:01 | INFO    | apscheduler.scheduler    | Scheduler has been shut down
+2026-10-17 23:36:01 | INFO    | __main__                 | === Завершение приложения (код 0) ===
+2026-10-17 23:45:58 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 23:45:59 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 23:45:59 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-17 23:45:59 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-17 23:45:59 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-17 23:47:10 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 23:47:10 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 23:47:10 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-17 23:47:10 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-17 23:47:10 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-17 23:49:10 | INFO    | core.file_ops            | Хардлинк: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка — копия (2)\tets_copy1.txt → E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка\tets.txt
+2026-10-17 23:50:52 | INFO    | core.file_ops            | Хардлинк: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка\tets.txt → E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка — копия (2)\tets_copy1_copy1.txt
+2026-10-17 23:51:03 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 23:51:03 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 23:51:03 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-17 23:51:03 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-17 23:51:03 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-17 23:52:05 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-17 23:52:05 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-17 23:52:05 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-17 23:52:05 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-17 23:52:05 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-17 23:52:28 | INFO    | core.file_ops            | Хардлинк: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка — копия (2)\tets_copy1_copy1.txt → E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка\tets.txt
+2026-10-17 23:52:57 | INFO    | core.file_ops            | Симлинк: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка\tets.txt → E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка — копия (2)\tets_copy1_copy1.txt
+2026-10-18 00:11:00 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-18 00:11:00 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-18 00:11:00 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-18 00:11:00 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-18 00:11:00 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-18 00:13:39 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-18 00:13:39 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-18 00:13:39 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-18 00:13:39 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-18 00:13:39 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-18 00:14:32 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-18 00:14:32 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-18 00:14:32 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-18 00:14:32 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-18 00:14:32 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-18 00:15:11 | INFO    | core.file_ops            | [DRY-RUN] Удалить: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\ывафыв — копия (2).txt
+2026-10-18 00:15:11 | INFO    | core.file_ops            | [DRY-RUN] Удалить: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\ывафыв — копия (3).txt
+2026-10-18 00:15:11 | INFO    | core.file_ops            | [DRY-RUN] Удалить: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\ывафыв — копия (2) — копия.txt
+2026-10-18 00:15:11 | INFO    | core.file_ops            | [DRY-RUN] Удалить: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка\tets_copy1_copy1.txt
+2026-10-18 00:15:11 | INFO    | core.file_ops            | [DRY-RUN] Удалить: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка — копия (2)\tets_copy1_copy1.txt
+2026-10-18 00:22:10 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-18 00:22:10 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-18 00:22:10 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-18 00:22:10 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-18 00:22:10 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-18 00:22:16 | INFO    | gui.theme_manager        | Тема применена: windows_vista
+2026-10-18 00:22:24 | INFO    | gui.theme_manager        | Тема применена: windows_11
+2026-10-18 00:22:29 | INFO    | gui.theme_manager        | Тема применена: kde_plasma
+2026-10-18 00:22:33 | INFO    | gui.theme_manager        | Тема применена: proton
+2026-10-18 00:22:39 | INFO    | gui.theme_manager        | Тема применена: windows_vista
+2026-10-18 00:22:45 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-18 00:25:01 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-18 00:25:01 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-18 00:25:01 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-18 00:25:01 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-18 00:25:01 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-18 00:26:27 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\ывафыв — копия (2).txt
+2026-10-18 00:26:27 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка\ывафыв — копия (2).txt
+2026-10-18 00:26:27 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\ывафыв — копия (3).txt
+2026-10-18 00:26:27 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка\tets_copy1_copy1.txt
+2026-10-18 00:26:27 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка — копия (2)\tets_copy1_copy1.txt
+2026-10-18 00:38:47 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-18 00:38:47 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-18 00:38:47 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-18 00:38:47 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-18 00:38:47 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-18 00:40:47 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка\222 — копия (2).txt
+2026-10-18 00:40:47 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\222 — копия (3) — копия.txt
+2026-10-18 00:40:47 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\222 — копия (2) — копия.txt
+2026-10-18 00:40:47 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\222 — копия (4) — копия.txt
+2026-10-18 00:40:47 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка — копия (2)\test.txt
+2026-10-18 00:40:47 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\test.txt
+2026-10-18 00:43:44 | INFO    | utils.logging_setup      | Логирование инициализировано, файл: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\Deep_dublicator\logs\app.log
+2026-10-18 00:43:44 | INFO    | gui.theme_manager        | Тема применена: dark
+2026-10-18 00:43:44 | INFO    | apscheduler.scheduler    | Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-10-18 00:43:44 | INFO    | apscheduler.scheduler    | Added job "_start_scheduler.<locals>.check_schedule" to job store "default"
+2026-10-18 00:43:44 | INFO    | apscheduler.scheduler    | Scheduler started
+2026-10-18 00:44:03 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка\tets.txt
+2026-10-18 00:44:03 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка — копия (2)\tets.txt
+2026-10-18 00:44:03 | INFO    | core.file_ops            | Удалён: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка\222 — копия (2).txt
+2026-10-18 00:45:15 | INFO    | core.file_ops            | Удалена пустая папка: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка (2)
+2026-10-18 00:45:15 | INFO    | core.file_ops            | Удалена пустая папка: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка (2) — копия
+2026-10-18 00:45:15 | INFO    | core.file_ops            | Удалена пустая папка: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка (3) — копия
+2026-10-18 00:45:15 | INFO    | core.file_ops            | Удалена пустая папка: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка (4) — копия
+2026-10-18 00:45:15 | INFO    | core.file_ops            | Удалена пустая папка: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка (5) — копия
+2026-10-18 00:45:15 | INFO    | core.file_ops            | Удалена пустая папка: E:\ЯД\YandexDisk\Обучение\My_projects\dublicator\gor_test\Новая папка (6) — копия
+2026-10-18 00:45:42 | INFO    | gui.theme_manager        | Тема применена: windows_7
