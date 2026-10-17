@@ -38,6 +38,7 @@
 ```bash
 git https://github.com/Valllium/deep-dublicator.git
 cd deep-dublicator
+```
 
 ### 2. Создание виртуального окружения
 Это изолирует зависимости проекта от вашей системы.
@@ -45,37 +46,45 @@ cd deep-dublicator
 ```bash
 # Windows / macOS / Linux
 python -m venv .venv
+```
 ### 3. Активация виртуального окружения
 Выберите команду в зависимости от вашей операционной системы и терминала:
 
 🪟 Windows (Командная строка / CMD):
 
-cmd
+```cmd
 .venv\Scripts\activate.bat
+```
 🪟 Windows (PowerShell):
 
-powershell
+```powershell
+
 .venv\Scripts\Activate.ps1
+```
 (Если PowerShell выдает ошибку политики выполнения, выполните: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser и попробуйте снова).
 
 🍏 macOS / 🐧 Linux (Bash / Zsh):
 
 ```bash
 source .venv/bin/activate
+```
 ### 4. Установка зависимостей
 После активации окружения (в начале строки терминала появится (.venv)), установите библиотеки:
 
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
+```
 ### 5. Запуск приложения
 ```bash
 python main.py
+```
 💻 Запуск в режиме CLI (без интерфейса)
 Приложение поддерживает работу из командной строки для автоматизации:
 
 ```bash
 python main.py --cli /path/to/scan --report report.html
+```
 📄 Лицензия
 Этот проект распространяется под лицензией MIT. Подробности можно найти в файле LICENSE.
 
