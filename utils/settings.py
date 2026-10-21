@@ -52,3 +52,11 @@ def get_min_savings_bytes() -> int:
 
 def set_min_savings_bytes(v: int) -> None:
     _settings().setValue("scan/min_savings_bytes", int(v))
+
+
+def get_vt_api_key() -> str:
+    return _settings().value("api/virustotal", "", type=str)
+
+
+def set_vt_api_key(key: str) -> None:
+    _settings().setValue("api/virustotal", key)

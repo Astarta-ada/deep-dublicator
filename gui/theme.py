@@ -246,6 +246,7 @@ QWidget {{
     font-size: 13px;
 }}
 
+
 QMainWindow, QDialog {{
     background: {c['bg']};
 }}
@@ -621,6 +622,26 @@ QGroupBox[class="category"]::title {{
 QGroupBox[class="category"] QGroupBox {{
     background: {c['surface']};
     border: 1px solid {c['border']};
+}}
+
+/* ======================= Строки файлов (состояния) ======================= */
+QWidget#fileRow[state="original"] {{
+    background: {c['original_bg']};
+    border: 1px solid {c['original_border']};
+}}
+QWidget#fileRow[state="delete"] {{
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}}
+QWidget#fileRow[state="keep"] {{
+    background: transparent;
+    border: 1px solid transparent;
+}}
+QWidget#fileRow[state="original"] QLabel,
+QWidget#fileRow[state="delete"] QLabel,
+QWidget#fileRow[state="keep"] QLabel {{
+    background: transparent;
+    color: {c['text']};
 }}
 
 """

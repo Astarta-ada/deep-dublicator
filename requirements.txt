@@ -9,3 +9,4 @@ APScheduler>=3.10
 psutil>=5.9.0
 mutagen>=1.47
 opencv-python-headless>=4.8
+requests>=2.31.0

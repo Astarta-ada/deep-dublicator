@@ -1,62 +1,30 @@
 import logging
 from pathlib import Path
-from PySide6.QtGui import QAction, QActionGroup
+from PySide6.QtGui import QAction, QActionGroup, QIcon
 from PySide6.QtWidgets import (
     QMainWindow,
-    QTabWidget,
+    QWidget,
+    QHBoxLayout,
+    QListWidget,
+    QListWidgetItem,
+    QStackedWidget,
     QMessageBox,
     QFileDialog,
-    QDialog,
-    QVBoxLayout,
-    QListWidget,
-    QCheckBox,
-    QPushButton,
-    QLabel,
+    QSystemTrayIcon,
+    QMenu,
+    QStyle,
 )
+from PySide6.QtCore import Qt, QSettings
+
 from gui.scan_tab import ScanTab
 from gui.disk_analysis_tab import DiskAnalysisTab
+from gui.space_hogs_tab import SpaceHogsTab
+from gui.junk_cleaner_tab import JunkCleanerTab
 from gui.theme_manager import ThemeManager
 from utils import settings as user_settings
 from utils.config import APP_NAME, APP_VERSION
-from utils.history import get_history
-from core.file_ops import remove_empty_dirs
-from gui.widgets import human_size
 
-
-class HistoryDialog(QDialog):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.setWindowTitle("История операций")
-        self.resize(800, 600)
-        lay = QVBoxLayout(self)
-        lst = QListWidget()
-        for t, a, p, s in get_history():
-            lst.addItem(f"[{t[:16]}] {a.upper()}: {p} ({human_size(s)})")
-        lay.addWidget(lst)
-
-
-class CleanupDialog(QDialog):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.setWindowTitle("Очистка кэшей")
-        self.resize(400, 300)
-        lay = QVBoxLayout(self)
-        lay.addWidget(QLabel("Выберите папки для очистки:"))
-        cbs = []
-        for path in ["%TEMP%", "node_modules", "__pycache__"]:
-            cb = QCheckBox(path)
-            cbs.append(cb)
-            lay.addWidget(cb)
-        btn = QPushButton("Очистить выбранные")
-        btn.clicked.connect(
-            lambda: (
-                QMessageBox.information(
-                    self, "Готово", "Очищено! (Симуляция)"
-                ),
-                self.accept(),
-            )
-        )
-        lay.addWidget(btn)
+log = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -64,18 +32,81 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
         self.resize(1100, 780)
+        self.setMinimumSize(900, 620)
 
-        self.tabs = QTabWidget()
-        self.tabs.setDocumentMode(True)
-        self.scan_tab = ScanTab()
-        self.tabs.addTab(self.scan_tab, "Поиск дубликатов")
+        # Сохранение геометрии
+        self.settings = QSettings("DupFinder", "Duplicate Finder")
+        geom = self.settings.value("window/geometry")
+        if geom:
+            self.restoreGeometry(geom)
 
-        self.disk_tab = DiskAnalysisTab()
-        self.tabs.addTab(self.disk_tab, "Анализ диска")
+        self._build_ui()
+        self._build_tray()
+        self._build_menu()
+        log.info("Главное окно создано")
+
+    def _build_ui(self):
+        central = QWidget()
+        self.setCentralWidget(central)
+        lay = QHBoxLayout(central)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        # Сайдбар (слева)
+        self.sidebar = QListWidget()
+        self.sidebar.setFixedWidth(200)
+        self.sidebar.setStyleSheet(
+            "QListWidget { background: #1e293b; color: white; border: none; padding-top: 10px; } QListWidget::item { padding: 12px; } QListWidget::item:selected { background: #3b82f6; }"
+        )
+
+        # Контент (справа)
+        self.stack = QStackedWidget()
+
+        # Добавляем вкладки
+        self.pages = [
+            ("🔍 Поиск дубликатов", ScanTab()),
+            ("📊 Анализ диска", DiskAnalysisTab()),
+            ("🐷 Большие файлы", SpaceHogsTab()),
+            ("🧹 Очистка мусора", JunkCleanerTab()),
+        ]
+
+        for name, widget in self.pages:
+            self.sidebar.addItem(QListWidgetItem(name))
+            self.stack.addWidget(widget)
+
+        self.sidebar.currentRowChanged.connect(self.stack.setCurrentIndex)
+        self.sidebar.setCurrentRow(0)
+
+        lay.addWidget(self.sidebar)
+        lay.addWidget(self.stack, 1)
+
+        # Прокидываем сигнал из анализа диска
+        self.disk_tab = self.pages[1][1]
         self.disk_tab.find_duplicates_requested.connect(self._jump_dups)
 
-        self.setCentralWidget(self.tabs)
-        self._build_menu()
+        # Сохранение ширины колонок (пример для таблицы больших файлов)
+        self.hogs_tab = self.pages[2][1]
+        hogs_state = self.settings.value("hogs_table/header")
+        if hogs_state:
+            self.hogs_tab.table.horizontalHeader().restoreState(hogs_state)
+
+    def _build_tray(self):
+        self.tray = QSystemTrayIcon(self)
+        # Заглушка иконки (используем стандартную)
+        self.tray.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
+        self.tray.setToolTip("Deep Dublicator")
+
+        tray_menu = QMenu()
+        act_show = QAction("Развернуть", self)
+        act_show.triggered.connect(self.showNormal)
+        act_quit = QAction("Выход", self)
+        act_quit.triggered.connect(self.close)
+
+        tray_menu.addAction(act_show)
+        tray_menu.addSeparator()
+        tray_menu.addAction(act_quit)
+        self.tray.setContextMenu(tray_menu)
+        self.tray.show()
 
     def _build_menu(self):
         mb = self.menuBar()
@@ -84,47 +115,45 @@ class MainWindow(QMainWindow):
         fm = mb.addMenu("Файл")
         fm.addAction("Выход", self.close)
 
-        # Инструменты
-        tm = mb.addMenu("Инструменты")
-        tm.addAction(
-            "Очистка кэшей и мусора", lambda: CleanupDialog(self).exec()
-        )
-        tm.addAction("История операций", lambda: HistoryDialog(self).exec())
-        tm.addAction("Удалить пустые папки", self._rm_empty)
-
-        # Вид
+        # Вид (Темы)
         vm = mb.addMenu("Вид")
-        self.act_notify = QAction("Уведомлять о завершении", self)
-        self.act_notify.setCheckable(True)
-        self.act_notify.setChecked(
-            user_settings._settings().value("notify", True, bool)
-        )
-        vm.addAction(self.act_notify)
-
-        self.act_prev = QAction("Превью в группах", self)
-        self.act_prev.setCheckable(True)
-        self.act_prev.setChecked(
-            user_settings._settings().value("group_preview", True, bool)
-        )
-        vm.addAction(self.act_prev)
-
-        vm.addSeparator()
-        tm_menu = vm.addMenu("Тема")
+        theme_menu = vm.addMenu("Тема")
         tmgr = ThemeManager.instance()
         grp = QActionGroup(self)
         for k, n in tmgr.available().items():
             a = QAction(n, self, checkable=True, checked=(k == tmgr.current))
             a.triggered.connect(lambda _, key=k: tmgr.apply(key))
             grp.addAction(a)
-            tm_menu.addAction(a)
+            theme_menu.addAction(a)
 
     def _jump_dups(self, path):
-        self.tabs.setCurrentIndex(0)
-        self.scan_tab.path_edit.setText(path)
-        self.scan_tab.mode_combo.setCurrentIndex(0)
+        self.sidebar.setCurrentRow(0)
+        p = Path(path)
+        # Если передан файл, берем его родительскую папку
+        if p.is_file():
+            p = p.parent
 
-    def _rm_empty(self):
-        d = QFileDialog.getExistingDirectory(self, "Удалить пустые папки в…")
-        if d:
-            remove_empty_dirs(Path(d))
-            QMessageBox.information(self, "Готово", "Пустые папки удалены.")
+        self.pages[0][1].path_edit.setText(str(p))
+        self.pages[0][1].mode_combo.setCurrentIndex(0)
+
+    def notify(self, title, message):
+        """Для вызова из других вкладок."""
+        if self.tray.isSystemTrayAvailable():
+            self.tray.showMessage(
+                title, message, QSystemTrayIcon.Information, 3000
+            )
+
+    def closeEvent(self, event):
+        # Сохраняем геометрию окна и ширину колонок
+        self.settings.setValue("window/geometry", self.saveGeometry())
+        self.settings.setValue(
+            "hogs_table/header",
+            self.hogs_tab.table.horizontalHeader().saveState(),
+        )
+
+        # Вместо выхода сворачиваем в трей (опционально)
+        # event.ignore()
+        # self.hide()
+        # self.tray.showMessage("Свернуто", "Приложение продолжает работать в фоне.")
+
+        super().closeEvent(event)

@@ -419,10 +419,18 @@ class ScanTab(QWidget):
         self.dry_run.setToolTip(
             "Показать, что будет сделано, но не удалять файлы"
         )
+        # --- Кнопка VirusTotal ---
+        self.vt_btn = QPushButton("🛡 VirusTotal")
+        self.vt_btn.setToolTip(
+            "Проверить хеш первого файла из первой группы в базе VirusTotal"
+        )
+        self.vt_btn.clicked.connect(self._check_vt)
+        # --------------------------
 
         tools.addWidget(self.sort_btn)
         tools.addWidget(self.collapse_btn)
         tools.addWidget(self.dry_run)
+        tools.addWidget(self.vt_btn)
         tools.addStretch()
         root.addLayout(tools)
 
@@ -610,6 +618,13 @@ class ScanTab(QWidget):
         self._status = f"Найдено групп: {len(res)}, файлов: {sum(len(v) for v in res.values())}"
         self.status.setText(self._status)
         self._populate(res)
+
+        # Уведомление в трей
+        main_win = self.window()
+        if hasattr(main_win, "notify"):
+            main_win.notify(
+                "Сканирование завершено", f"Найдено групп: {len(res)}"
+            )
 
     def _populate(self, res, keep_orig=False):
         origs = (
@@ -899,3 +914,55 @@ class ScanTab(QWidget):
                 for g in self.groups:
                     for t in g.get_selection()[1]:
                         f.write(f'del "{t}"\n')
+
+    def _check_vt(self):
+        import requests
+        from utils.settings import get_vt_api_key, set_vt_api_key
+
+        api_key = get_vt_api_key()
+        if not api_key:
+            from PySide6.QtWidgets import QInputDialog
+
+            key, ok = QInputDialog.getText(
+                self, "VirusTotal API", "Введите API-ключ VirusTotal:"
+            )
+            if ok and key:
+                set_vt_api_key(key)
+                api_key = key
+            else:
+                return
+        # Проверяем первый файл из первой группы для примера
+        if not self.groups:
+            return
+        target = self.groups[0].paths[0]
+
+        # Считаем SHA-256
+        from core.hasher import hash_file
+
+        h = hash_file(target)
+        if not h:
+            return
+
+        self.status.setText("Запрос к VirusTotal...")
+        try:
+            r = requests.get(
+                f"https://www.virustotal.com/api/v3/files/{h}",
+                headers={"x-apikey": api_key},
+            )
+            if r.status_code == 200:
+                stats = r.json()["data"]["attributes"]["last_analysis_stats"]
+                msg = f"Файл: {target.name}\nБезопасно: {stats['harmless']}\nВредоносно: {stats['malicious']}\nПодозрительно: {stats['suspicious']}"
+                QMessageBox.information(self, "VirusTotal", msg)
+            elif r.status_code == 404:
+                QMessageBox.information(
+                    self,
+                    "VirusTotal",
+                    "Файл еще не загружен в базу VirusTotal.",
+                )
+            else:
+                QMessageBox.warning(
+                    self, "Ошибка", f"Ошибка API: {r.status_code}"
+                )
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", str(e))
+        self.status.setText(self._status)

@@ -192,20 +192,32 @@ class DuplicateGroupWidget(QGroupBox):
 
     def _refresh_row_states(self):
         orig = self._get_original_index()
+        # Обрати внимание: переменные называются r (radio), c (check), row
         for i, (r, c, row) in enumerate(
             zip(self._radios, self._checks, self._rows)
         ):
             is_o = i == orig
+
+            # Блокируем/разблокируем чекбокс
             c.blockSignals(True)
             c.setChecked(not is_o and c.isChecked())
             c.setEnabled(not is_o)
             c.blockSignals(False)
 
+            # Жирный шрифт для оригинала
             f = r.font()
             f.setBold(is_o)
             r.setFont(f)
 
-            row.setProperty("original", "true" if is_o else "false")
+            # Устанавливаем состояние для QSS (цвета)
+            if is_o:
+                row.setProperty("state", "original")
+            elif c.isChecked():
+                row.setProperty("state", "delete")
+            else:
+                row.setProperty("state", "keep")
+
+            # Принудительно обновляем стиль
             row.style().unpolish(row)
             row.style().polish(row)
 

@@ -379,9 +379,14 @@ class DiskAnalysisTab(QWidget):
         m.addAction(
             "Открыть", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(p))
         )
-        m.addAction(
-            "Искать дубликаты", lambda: self.find_duplicates_requested.emit(p)
-        )
+
+        def _trigger_search(target_path):
+            tp = Path(target_path)
+            if tp.is_file():
+                tp = tp.parent
+            self.find_duplicates_requested.emit(str(tp))
+
+        m.addAction("Искать дубликаты", lambda: _trigger_search(p))
         m.addSeparator()
         m.addAction("В корзину", lambda: self._del(it, True))
         m.addAction("Удалить навсегда", lambda: self._del(it, False))
