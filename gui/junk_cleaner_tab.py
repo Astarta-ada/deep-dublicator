@@ -28,31 +28,49 @@ class JunkScanner(QThread):
     def run(self):
         results = []
         # 1. Temp
-        temp = os.environ.get("TEMP")
-        if temp and os.path.exists(temp):
-            size = self._get_size(temp)
-            results.append(("Временные файлы Windows (%TEMP%)", temp, size))
 
-        # 2. Сканируем папку на __pycache__, node_modules, Thumbs.db
-        cache_size, node_size, thumb_size = 0, 0, 0
+        local = os.environ.get("LOCALAPPDATA", "")
+        roaming = os.environ.get("APPDATA", "")
+
+        # 1. Кэши браузеров и программ
+        caches = {
+            "Chrome (Cache)": os.path.join(
+                local, "Google", "Chrome", "User Data", "Default", "Cache"
+            ),
+            "Edge (Cache)": os.path.join(
+                local, "Microsoft", "Edge", "User Data", "Default", "Cache"
+            ),
+            "Firefox (Cache)": os.path.join(
+                local, "Mozilla", "Firefox", "Profiles"
+            ),  # Упрощенно
+            "Telegram (Cache)": os.path.join(
+                roaming, "Telegram Desktop", "tdata", "user_data", "cache"
+            ),
+            "Windows Temp (%TEMP%)": os.environ.get("TEMP", ""),
+        }
+
+        for name, path in caches.items():
+            if path and os.path.exists(path):
+                size = self._get_size(path)
+                if size > 0:
+                    results.append((name, path, size))
+
+        # 2. Мусор в выбранной папке (__pycache__, node_modules)
+        cache_size, node_size = 0, 0
         cache_paths, node_paths = [], []
 
-        for dirpath, dirnames, filenames in os.walk(self.root):
-            if "__pycache__" in dirnames:
-                p = os.path.join(dirpath, "__pycache__")
-                cache_size += self._get_size(p)
-                cache_paths.append(p)
-                dirnames.remove("__pycache__")
-
-            if "node_modules" in dirnames:
-                p = os.path.join(dirpath, "node_modules")
-                node_size += self._get_size(p)
-                node_paths.append(p)
-                dirnames.remove("node_modules")
-
-            for f in filenames:
-                if f == "Thumbs.db":
-                    thumb_size += os.path.getsize(os.path.join(dirpath, f))
+        if self.root and os.path.isdir(self.root):
+            for dirpath, dirnames, filenames in os.walk(self.root):
+                if "__pycache__" in dirnames:
+                    p = os.path.join(dirpath, "__pycache__")
+                    cache_size += self._get_size(p)
+                    cache_paths.append(p)
+                    dirnames.remove("__pycache__")
+                if "node_modules" in dirnames:
+                    p = os.path.join(dirpath, "node_modules")
+                    node_size += self._get_size(p)
+                    node_paths.append(p)
+                    dirnames.remove("node_modules")
 
         if cache_size > 0:
             results.append(
@@ -64,19 +82,7 @@ class JunkScanner(QThread):
             )
         if node_size > 0:
             results.append(
-                (
-                    "Зависимости Node.js (node_modules)",
-                    "\n".join(node_paths),
-                    node_size,
-                )
-            )
-        if thumb_size > 0:
-            results.append(
-                (
-                    "Миниатюры Windows (Thumbs.db)",
-                    "Найдены в папке",
-                    thumb_size,
-                )
+                ("Node.js (node_modules)", "\n".join(node_paths), node_size)
             )
 
         self.finished_ok.emit(results)

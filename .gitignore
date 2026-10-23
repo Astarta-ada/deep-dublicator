@@ -93,3 +93,4 @@ report_*.html
 delete_*.txt
 dups_*.csv
 delete_*.bat
+*.bat

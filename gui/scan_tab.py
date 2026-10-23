@@ -46,7 +46,7 @@ from gui.preview_panel import PreviewPanel
 from gui.result_filter_bar import ResultFilterBar
 from gui.widgets import DuplicateGroupWidget, CategoryGroupWidget, human_size
 from utils import settings as user_settings
-from utils.config import EMPTY_FILE_HASH, DEFAULT_HASH_WORKERS
+from utils.config import EMPTY_FILE_HASH, DEFAULT_HASH_WORKERS, AUTOSAVE_FILE
 
 log = logging.getLogger(__name__)
 
@@ -234,8 +234,8 @@ class ScanWorker(QThread):
 class ApplyWorker(QThread):
     """Фоновый поток для удаления/замены файлов, чтобы интерфейс не зависал."""
 
-    progress = Signal(int, int)  # обработано, всего
-    finished_ok = Signal(int, list)  # успешно, список ошибок
+    progress = Signal(int, int)
+    finished_ok = Signal(int, list)
 
     def __init__(self, groups, action, backup_dir, base_root, dry_run):
         super().__init__()
@@ -248,8 +248,6 @@ class ApplyWorker(QThread):
     def run(self):
         total_ok = 0
         all_errors = []
-
-        # Считаем общее количество целей
         total_targets = sum(g.selected_count() for g in self.groups)
         processed = 0
 
@@ -307,7 +305,6 @@ class ScanTab(QWidget):
         self.btn_toggle.clicked.connect(self._toggle_settings)
         root.addWidget(self.btn_toggle)
 
-        # Контейнер настроек
         self.settings_widget = QWidget()
         settings = QVBoxLayout(self.settings_widget)
         settings.setContentsMargins(0, 0, 0, 0)
@@ -365,7 +362,6 @@ class ScanTab(QWidget):
         )
         settings.addWidget(self.glob_edit)
 
-        # Поле для выбора целевого файла (для режима ссылок)
         self.target_file_layout = QHBoxLayout()
         self.target_file_edit = QLineEdit()
         self.target_file_edit.setPlaceholderText(
@@ -387,7 +383,6 @@ class ScanTab(QWidget):
 
         root.addWidget(self.settings_widget)
 
-        # Кнопка поиска (ВНЕ сворачиваемого блока)
         self.scan_btn = QPushButton("🔍  Найти дубликаты")
         self.scan_btn.setProperty("class", "primary")
         self.scan_btn.setMinimumHeight(44)
@@ -419,13 +414,10 @@ class ScanTab(QWidget):
         self.dry_run.setToolTip(
             "Показать, что будет сделано, но не удалять файлы"
         )
-        # --- Кнопка VirusTotal ---
+
         self.vt_btn = QPushButton("🛡 VirusTotal")
-        self.vt_btn.setToolTip(
-            "Проверить хеш первого файла из первой группы в базе VirusTotal"
-        )
+        self.vt_btn.setToolTip("Проверить хеш первого файла в базе VirusTotal")
         self.vt_btn.clicked.connect(self._check_vt)
-        # --------------------------
 
         tools.addWidget(self.sort_btn)
         tools.addWidget(self.collapse_btn)
@@ -569,6 +561,10 @@ class ScanTab(QWidget):
             else None
         )
 
+        main_win = self.window()
+        if hasattr(main_win, "start_tray_spinner"):
+            main_win.start_tray_spinner()
+
         self.worker = ScanWorker(
             p,
             self.rec_cb.isChecked(),
@@ -603,12 +599,21 @@ class ScanTab(QWidget):
         self.scan_btn.setEnabled(True)
         self.btn_toggle.setChecked(True)
         self._toggle_settings(True)
+
+        main_win = self.window()
+        if hasattr(main_win, "stop_tray_spinner"):
+            main_win.stop_tray_spinner()
+
         QMessageBox.critical(self, "Ошибка", msg)
 
     def _done(self, res):
         self.progress.hide()
         self.scan_btn.setEnabled(True)
         self.last_result = res
+
+        main_win = self.window()
+        if hasattr(main_win, "stop_tray_spinner"):
+            main_win.stop_tray_spinner()
 
         if not res:
             self._status = "Дубликаты не найдены 🎉"
@@ -619,12 +624,42 @@ class ScanTab(QWidget):
         self.status.setText(self._status)
         self._populate(res)
 
-        # Уведомление в трей
-        main_win = self.window()
-        if hasattr(main_win, "notify"):
-            main_win.notify(
-                "Сканирование завершено", f"Найдено групп: {len(res)}"
+        # --- АВТОСОХРАНЕНИЕ ---
+        try:
+            r = {
+                w.hash_key: [w.get_original()]
+                + [x for x in w.paths if x != w.get_original()]
+                for w in self.groups
+            }
+            session = build_session_from_groups(
+                r, self.path_edit.text(), self.filter_panel.as_dict()
             )
+            save_session(session, AUTOSAVE_FILE)
+        except Exception as e:
+            log.error("Не удалось автосохранить сессию: %s", e)
+
+        # Уведомление в трей
+        if hasattr(main_win, "notify"):
+            main_win.notify("Поиск завершен", f"Найдено групп: {len(res)}")
+
+    def restore_autosave(self):
+        """Загружает сессию из автосохранения."""
+        if not AUTOSAVE_FILE.exists():
+            return
+        try:
+            s = load_session(AUTOSAVE_FILE)
+            res = {}
+            for g in s.groups:
+                ex = [Path(f.path) for f in g.files if Path(f.path).exists()]
+                if len(ex) > 1:
+                    res[g.hash_key] = ex
+
+            if res:
+                self._status = f"Восстановлено из кэша: {len(res)} групп"
+                self.status.setText(self._status)
+                self._populate(res, keep_orig=True)
+        except Exception as e:
+            log.error("Не удалось восстановить сессию: %s", e)
 
     def _populate(self, res, keep_orig=False):
         origs = (
@@ -792,13 +827,16 @@ class ScanTab(QWidget):
             if confirm != QMessageBox.Yes:
                 return
 
-        # Запускаем в фоновом потоке, чтобы UI не зависал
         self.btn_apply.setEnabled(False)
         self.scan_btn.setEnabled(False)
         self.progress.show()
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
         self.progress.setFormat("Обработка файлов: %p%")
+
+        main_win = self.window()
+        if hasattr(main_win, "start_tray_spinner"):
+            main_win.start_tray_spinner()
 
         self.apply_worker = ApplyWorker(
             groups_to_process, act, bkp, Path(self.path_edit.text()), dry
@@ -814,14 +852,12 @@ class ScanTab(QWidget):
         self.btn_apply.setEnabled(True)
         self.scan_btn.setEnabled(True)
 
-        # Удаляем обработанные группы из интерфейса
-        # Собираем хэши групп, где не было ошибок
-        # (Для простоты просто перерисовываем список, оставляя только те, где есть ошибки или dry_run)
+        main_win = self.window()
+        if hasattr(main_win, "stop_tray_spinner"):
+            main_win.stop_tray_spinner()
+
         if not self.dry_run:
-            # Перерисовываем интерфейс на основе оставшихся групп
-            # Но проще просто удалить группы, которые полностью обработались
-            # В идеале нужно перерисовать по last_result, но мы просто обновим список
-            pass
+            self._populate(self.last_result, keep_orig=True)
 
         self._upd_stat()
         msg = f"Успешно обработано: {total_ok}"
@@ -918,6 +954,7 @@ class ScanTab(QWidget):
     def _check_vt(self):
         import requests
         from utils.settings import get_vt_api_key, set_vt_api_key
+        from core.hasher import hash_file
 
         api_key = get_vt_api_key()
         if not api_key:
@@ -931,13 +968,10 @@ class ScanTab(QWidget):
                 api_key = key
             else:
                 return
-        # Проверяем первый файл из первой группы для примера
+
         if not self.groups:
             return
         target = self.groups[0].paths[0]
-
-        # Считаем SHA-256
-        from core.hasher import hash_file
 
         h = hash_file(target)
         if not h:

@@ -1,6 +1,8 @@
+"""Главное окно приложения."""
+
 import logging
 from pathlib import Path
-from PySide6.QtGui import QAction, QActionGroup, QIcon
+from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -14,7 +16,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QStyle,
 )
-from PySide6.QtCore import Qt, QSettings
+from PySide6.QtCore import Qt, QSettings, QTimer  # <--- Добавлен QTimer
 
 from gui.scan_tab import ScanTab
 from gui.disk_analysis_tab import DiskAnalysisTab
@@ -22,7 +24,7 @@ from gui.space_hogs_tab import SpaceHogsTab
 from gui.junk_cleaner_tab import JunkCleanerTab
 from gui.theme_manager import ThemeManager
 from utils import settings as user_settings
-from utils.config import APP_NAME, APP_VERSION
+from utils.config import APP_NAME, APP_VERSION, AUTOSAVE_FILE
 
 log = logging.getLogger(__name__)
 
@@ -40,9 +42,18 @@ class MainWindow(QMainWindow):
         if geom:
             self.restoreGeometry(geom)
 
+        # Переменные для спиннера в трее
+        self.tray_timer = QTimer(self)
+        self.tray_timer.timeout.connect(self._spin_tray)
+        self.tray_spin_state = False
+
         self._build_ui()
         self._build_tray()
         self._build_menu()
+
+        # Проверка автосохранения
+        self._check_autosave()
+
         log.info("Главное окно создано")
 
     def _build_ui(self):
@@ -92,7 +103,6 @@ class MainWindow(QMainWindow):
 
     def _build_tray(self):
         self.tray = QSystemTrayIcon(self)
-        # Заглушка иконки (используем стандартную)
         self.tray.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
         self.tray.setToolTip("Deep Dublicator")
 
@@ -126,15 +136,33 @@ class MainWindow(QMainWindow):
             grp.addAction(a)
             theme_menu.addAction(a)
 
-    def _jump_dups(self, path):
+    def _jump_dups(self, path: str):
         self.sidebar.setCurrentRow(0)
+
         p = Path(path)
-        # Если передан файл, берем его родительскую папку
         if p.is_file():
             p = p.parent
 
         self.pages[0][1].path_edit.setText(str(p))
         self.pages[0][1].mode_combo.setCurrentIndex(0)
+
+    def _spin_tray(self):
+        self.tray_spin_state = not self.tray_spin_state
+        if self.tray_spin_state:
+            self.tray.setIcon(
+                self.style().standardIcon(QStyle.SP_BrowserReload)
+            )
+        else:
+            self.tray.setIcon(
+                self.style().standardIcon(QStyle.SP_ComputerIcon)
+            )
+
+    def start_tray_spinner(self):
+        self.tray_timer.start(500)
+
+    def stop_tray_spinner(self):
+        self.tray_timer.stop()
+        self.tray.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
 
     def notify(self, title, message):
         """Для вызова из других вкладок."""
@@ -143,17 +171,21 @@ class MainWindow(QMainWindow):
                 title, message, QSystemTrayIcon.Information, 3000
             )
 
+    def _check_autosave(self):
+        if AUTOSAVE_FILE.exists():
+            res = QMessageBox.question(
+                self,
+                "Восстановление",
+                "Найдены результаты прошлого поиска. Восстановить их?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if res == QMessageBox.Yes:
+                self.pages[0][1].restore_autosave()
+
     def closeEvent(self, event):
-        # Сохраняем геометрию окна и ширину колонок
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue(
             "hogs_table/header",
             self.hogs_tab.table.horizontalHeader().saveState(),
         )
-
-        # Вместо выхода сворачиваем в трей (опционально)
-        # event.ignore()
-        # self.hide()
-        # self.tray.showMessage("Свернуто", "Приложение продолжает работать в фоне.")
-
         super().closeEvent(event)

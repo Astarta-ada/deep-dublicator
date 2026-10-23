@@ -2,9 +2,10 @@ import logging
 import psutil
 import shutil
 import os
+import time
 from pathlib import Path
 import squarify
-from PySide6.QtCore import Qt, QThread, Signal, QDir, QUrl
+from PySide6.QtCore import Qt, QThread, Signal, QDir, QUrl, QRect
 from PySide6.QtGui import (
     QPainter,
     QColor,
@@ -12,6 +13,7 @@ from PySide6.QtGui import (
     QDesktopServices,
     QKeySequence,
     QShortcut,
+    QBrush,
 )
 from PySide6.QtWidgets import (
     QWidget,
@@ -96,6 +98,7 @@ class FolderScannerWorker(QThread):
                                     "files": 1,
                                     "is_dir": False,
                                     "error": None,
+                                    "mtime": st.st_mtime,
                                 }
                             )
                     except PermissionError:
@@ -135,9 +138,12 @@ class FolderScannerWorker(QThread):
 
 
 class TreemapWidget(QWidget):
+    folder_clicked = Signal(str)  # <--- Новый сигнал
+
     def __init__(self):
         super().__init__()
         self.data = {}
+        self.rects = []  # Будем хранить координаты квадратов
 
     def set_data(self, d):
         self.data = d
@@ -150,7 +156,20 @@ class TreemapWidget(QWidget):
         vals, names = list(self.data.values()), list(self.data.keys())
         rects = squarify.normalize_sizes(vals, self.width(), self.height())
         sq = squarify.squarify(rects, 0, 0, self.width(), self.height())
+
+        self.rects.clear()  # Очищаем старые
+
         for i, r in enumerate(sq):
+            # Сохраняем область квадрата и имя папки для кликов
+            self.rects.append(
+                (
+                    QRect(
+                        int(r["x"]), int(r["y"]), int(r["dx"]), int(r["dy"])
+                    ),
+                    names[i],
+                )
+            )
+
             color = QColor.fromHsv(
                 int(360 * (i / max(1, len(names)))), 180, 220
             )
@@ -165,6 +184,14 @@ class TreemapWidget(QWidget):
                     int(r["y"]) + 16,
                     f"{names[i]}\n{human_size(vals[i])}",
                 )
+
+    def mousePressEvent(self, event):
+        # Ищем, по какому квадрату кликнули
+        for rect, name in self.rects:
+            if rect.contains(event.pos()):
+                # Если это папка (добавляем текущий путь), можно эмитить сигнал
+                self.folder_clicked.emit(name)
+                break
 
 
 class HeatmapWidget(QWidget):
@@ -200,6 +227,7 @@ class DiskAnalysisTab(QWidget):
         self.workers = []
         self.history = []
         self.hist_idx = -1
+        self.setAcceptDrops(True)
         self._build_ui()
 
     def _build_ui(self):
@@ -272,6 +300,7 @@ class DiskAnalysisTab(QWidget):
 
         self.right_tabs = QTabWidget()
         self.treemap = TreemapWidget()
+        self.treemap.folder_clicked.connect(self._on_treemap_click)
         self.right_tabs.addTab(self.treemap, "Карта")
         self.top_files = QListWidget()
         self.right_tabs.addTab(self.top_files, "Топ файлов")
@@ -339,6 +368,12 @@ class DiskAnalysisTab(QWidget):
                 self.top_files.addItem(
                     f"{human_size(x['size'])} — {x['name']}"
                 )
+        # Уведомление
+        main_win = self.window()
+        if hasattr(main_win, "notify"):
+            main_win.notify(
+                "Анализ диска", f"Анализ '{Path(p).name}' завершен."
+            )
 
     def _expand(self, item):
         if item.childCount() == 1 and item.child(0).text(0) == "...":
@@ -349,6 +384,7 @@ class DiskAnalysisTab(QWidget):
         self._add_items(item, data, item.data(1, Qt.UserRole) or 1)
 
     def _add_items(self, parent, data, total):
+        now = time.time()
         for e in data:
             it = QTreeWidgetItem(parent)
             it.setText(0, e["name"])
@@ -359,11 +395,20 @@ class DiskAnalysisTab(QWidget):
             it.setData(
                 2, Qt.UserRole, (e["size"] / total * 100) if total else 0
             )
+
             if e["error"]:
                 it.setText(2, e["error"])
                 it.setForeground(2, QColor("red"))
             elif e["is_dir"]:
                 QTreeWidgetItem(it).setText(0, "...")
+            else:
+                # Подсветка старых файлов (старше 1 года)
+                mtime = e.get("mtime", now)
+                if now - mtime > 365 * 24 * 3600:
+                    it.setForeground(
+                        0, QBrush(QColor("#9ca3af"))
+                    )  # Серый текст
+                    it.setToolTip(0, "Файл не изменялся более года")
 
     def _filter(self, text):
         for i in range(self.tree.topLevelItemCount()):
@@ -436,4 +481,31 @@ class DiskAnalysisTab(QWidget):
         if self.hist_idx < len(self.history) - 1:
             self.hist_idx += 1
             self.path_edit.setText(self.history[self.hist_idx])
+            self._start()
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            for url in e.mimeData().urls():
+                if url.isLocalFile() and Path(url.toLocalFile()).is_dir():
+                    e.acceptProposedAction()
+                    return
+        e.ignore()
+
+    def dropEvent(self, e):
+        for url in e.mimeData().urls():
+            if url.isLocalFile():
+                p = Path(url.toLocalFile())
+                if p.is_dir():
+                    self.path_edit.setText(str(p))
+                    self._start()
+                    e.acceptProposedAction()
+                    return
+        e.ignore()
+
+    def _on_treemap_click(self, folder_name):
+        """Открывает папку, по которой кликнули в Treemap."""
+        current = Path(self.path_edit.text().strip())
+        new_path = current / folder_name.strip("\\")
+        if new_path.is_dir():
+            self.path_edit.setText(str(new_path))
             self._start()

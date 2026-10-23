@@ -74,6 +74,7 @@ class SpaceHogsTab(QWidget):
     def __init__(self):
         super().__init__()
         self.worker = None
+        self.setAcceptDrops(True)
         self._build_ui()
 
     def _build_ui(self):
@@ -167,6 +168,12 @@ class SpaceHogsTab(QWidget):
         # 2. Включаем сортировку обратно, когда всё загружено
         self.table.setSortingEnabled(True)
 
+        main_win = self.window()
+        if hasattr(main_win, "notify"):
+            main_win.notify(
+                "Большие файлы", f"Поиск завершен. Найдено: {len(res)}"
+            )
+
     def _menu(self, pos):
         it = self.table.itemAt(pos)
         if not it:
@@ -194,3 +201,22 @@ class SpaceHogsTab(QWidget):
                 self.table.removeRow(row)
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", str(e))
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            for url in e.mimeData().urls():
+                if url.isLocalFile() and Path(url.toLocalFile()).is_dir():
+                    e.acceptProposedAction()
+                    return
+        e.ignore()
+
+    def dropEvent(self, e):
+        for url in e.mimeData().urls():
+            if url.isLocalFile():
+                p = Path(url.toLocalFile())
+                if p.is_dir():
+                    self.path_edit.setText(str(p))
+                    self._start()
+                    e.acceptProposedAction()
+                    return
+        e.ignore()

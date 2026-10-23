@@ -9,6 +9,9 @@ LOG_FILE = LOG_DIR / "app.log"
 APP_DATA_DIR = PROJECT_ROOT / "data"
 HASH_CACHE_DB = APP_DATA_DIR / "hashes.db"
 
+# Автосохранение последней сессии
+AUTOSAVE_FILE = APP_DATA_DIR / "autosave.dupsession.json"
+
 QUICK_HASH_BYTES = 65536
 CHUNK_SIZE = 65536
 EMPTY_FILE_HASH = "EMPTY"
