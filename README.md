@@ -46,7 +46,7 @@
 
 ### 1. Клонирование репозитория
 ```bash
-git https://github.com/Valllium/deep-dublicator.git
+git https://github.com/Astarta-ada/deep-dublicator.git
 cd deep-dublicator
 ```
 
