@@ -5,7 +5,7 @@ import os
 import time
 from pathlib import Path
 import squarify
-from PySide6.QtCore import Qt, QThread, Signal, QDir, QUrl, QRect
+from PySide6.QtCore import Qt, Signal, QDir, QUrl, QRect
 from PySide6.QtGui import (
     QPainter,
     QColor,
@@ -40,11 +40,80 @@ from PySide6.QtWidgets import (
 )
 from gui.widgets import human_size
 from core.file_ops import delete_file
+from core.workers import FolderScannerWorker
 
 log = logging.getLogger(__name__)
 
 
+class TreeItem(QTreeWidgetItem):
+    """# ==========================================
+    # 1. Кастомный элемент для правильной сортировки
+    # =========================================="""
+
+    def __lt__(self, other):
+        col = self.treeWidget().sortColumn()
+        if col == 1:  # Размер
+            return self.data(1, Qt.UserRole) < other.data(1, Qt.UserRole)
+        elif col == 2:  # Процент
+            return self.data(2, Qt.UserRole) < other.data(2, Qt.UserRole)
+        elif col == 3:  # Количество файлов
+            return int(self.text(3)) < int(other.text(3))
+        # По умолчанию сортируем как текст (Имя)
+        return self.text(col) < other.text(col)
+
+
 class PercentDelegate(QStyledItemDelegate):
+    """# ==========================================
+    # 2. Делегат для красивой отрисовки процентов
+    # =========================================="""
+
+    def paint(self, painter, option, index):
+        percent = index.data(Qt.UserRole)
+        if percent is None:
+            return super().paint(painter, option, index)
+
+        painter.save()
+
+        # Рисуем фон выделения, если строка выбрана
+        if option.state & QStyle.State_Selected:
+            painter.fillRect(option.rect, option.palette.highlight())
+
+        # Оставляем отступы, чтобы полоска не прилипала к краям
+        rect = option.rect.adjusted(4, 8, -4, -8)
+
+        # 1. Фон прогресс-бара (светло-серый)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#e2e8f0"))
+        painter.drawRoundedRect(rect, 3, 3)
+
+        # 2. Заполненная часть (зеленая)
+        if percent > 0:
+            fill_width = int(rect.width() * (percent / 100.0))
+            if fill_width > 0:
+                fill_rect = QRect(
+                    rect.x(), rect.y(), fill_width, rect.height()
+                )
+                painter.setBrush(QColor("#10b981"))  # Изумрудно-зеленый
+                painter.drawRoundedRect(fill_rect, 3, 3)
+
+        # 3. Текст с процентами поверх полоски
+        painter.setPen(
+            QColor("#0f172a")
+            if not (option.state & QStyle.State_Selected)
+            else QColor("#ffffff")
+        )
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(9)
+        painter.setFont(font)
+        painter.drawText(option.rect, Qt.AlignCenter, f"{percent:.1f}%")
+
+        painter.restore()
+
+
+class PercentDelegate(QStyledItemDelegate):
+    """Делегат для красивой отрисовки процентов (синяя полоска)."""
+
     def paint(self, painter, option, index):
         percent = index.data(Qt.UserRole)
         if percent is None:
@@ -63,152 +132,117 @@ class PercentDelegate(QStyledItemDelegate):
         painter.restore()
 
 
-class FolderScannerWorker(QThread):
-    finished_ok = Signal(list)
-
-    def __init__(self, path):
-        super().__init__()
-        self.path = path
-
-    def run(self):
-        results = []
-        try:
-            with os.scandir(self.path) as it:
-                for e in it:
-                    try:
-                        if e.is_dir(follow_symlinks=False):
-                            s, c = self._scan(e.path)
-                            results.append(
-                                {
-                                    "name": e.name,
-                                    "path": e.path,
-                                    "size": s,
-                                    "files": c,
-                                    "is_dir": True,
-                                    "error": None,
-                                }
-                            )
-                        elif e.is_file(follow_symlinks=False):
-                            st = e.stat()
-                            results.append(
-                                {
-                                    "name": e.name,
-                                    "path": e.path,
-                                    "size": st.st_size,
-                                    "files": 1,
-                                    "is_dir": False,
-                                    "error": None,
-                                    "mtime": st.st_mtime,
-                                }
-                            )
-                    except PermissionError:
-                        results.append(
-                            {
-                                "name": e.name,
-                                "path": e.path,
-                                "size": 0,
-                                "files": 0,
-                                "is_dir": True,
-                                "error": "Доступ закрыт",
-                            }
-                        )
-        except Exception:
-            pass
-        results.sort(key=lambda x: x["size"], reverse=True)
-        self.finished_ok.emit(results)
-
-    def _scan(self, path):
-        s, f = 0, 0
-        try:
-            with os.scandir(path) as it:
-                for e in it:
-                    try:
-                        if e.is_file(follow_symlinks=False):
-                            s += e.stat().st_size
-                            f += 1
-                        elif e.is_dir(follow_symlinks=False):
-                            a, b = self._scan(e.path)
-                            s += a
-                            f += b
-                    except:
-                        pass
-        except:
-            pass
-        return s, f
-
-
 class TreemapWidget(QWidget):
-    folder_clicked = Signal(str)  # <--- Новый сигнал
+    """Интерактивная карта диска."""
 
-    def __init__(self):
-        super().__init__()
+    folder_clicked = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.data = {}
-        self.rects = []  # Будем хранить координаты квадратов
+        self.rects = []
 
     def set_data(self, d):
         self.data = d
         self.update()
 
     def paintEvent(self, e):
-        p = QPainter(self)
-        if not self.data:
+        # Защита от нулевых размеров самого виджета (часто бывает при инициализации)
+        if self.width() <= 10 or self.height() <= 10:
             return
-        vals, names = list(self.data.values()), list(self.data.keys())
-        rects = squarify.normalize_sizes(vals, self.width(), self.height())
-        sq = squarify.squarify(rects, 0, 0, self.width(), self.height())
+        # Отсеиваем файлы с нулевым размером, иначе squarify падает с делением на ноль
+        valid_data = {k: v for k, v in self.data.items() if v > 0}
 
-        self.rects.clear()  # Очищаем старые
+        p = QPainter(self)
+        try:
 
-        for i, r in enumerate(sq):
-            # Сохраняем область квадрата и имя папки для кликов
-            self.rects.append(
-                (
-                    QRect(
-                        int(r["x"]), int(r["y"]), int(r["dx"]), int(r["dy"])
-                    ),
-                    names[i],
+            if not self.data:
+                p.drawText(self.rect(), Qt.AlignCenter, "Нет данных для карты")
+                return
+
+            vals, names = list(valid_data.values()), list(valid_data.keys())
+
+            # Используем только валидные данные
+            rects = squarify.normalize_sizes(vals, self.width(), self.height())
+            sq = squarify.squarify(rects, 0, 0, self.width(), self.height())
+
+            self.rects.clear()  # Очищаем старые
+
+            for i, r in enumerate(sq):
+                # Сохраняем область квадрата и имя папки для кликов
+                self.rects.append(
+                    (
+                        QRect(
+                            int(r["x"]),
+                            int(r["y"]),
+                            int(r["dx"]),
+                            int(r["dy"]),
+                        ),
+                        names[i],
+                    )
                 )
-            )
 
-            color = QColor.fromHsv(
-                int(360 * (i / max(1, len(names)))), 180, 220
-            )
-            p.fillRect(
-                int(r["x"]), int(r["y"]), int(r["dx"]), int(r["dy"]), color
-            )
-            p.setPen(Qt.black)
-            if r["dx"] > 60 and r["dy"] > 30:
-                p.setFont(QFont("Arial", 8))
-                p.drawText(
-                    int(r["x"]) + 4,
-                    int(r["y"]) + 16,
-                    f"{names[i]}\n{human_size(vals[i])}",
+                color = QColor.fromHsv(
+                    int(360 * (i / max(1, len(names)))), 180, 220
                 )
+                p.fillRect(
+                    int(r["x"]), int(r["y"]), int(r["dx"]), int(r["dy"]), color
+                )
+                p.setPen(Qt.black)
+                if r["dx"] > 60 and r["dy"] > 30:
+                    p.setFont(QFont("Arial", 8))
+                    p.drawText(
+                        int(r["x"]) + 4,
+                        int(r["y"]) + 16,
+                        f"{names[i]}\n{human_size(vals[i])}",
+                    )
+
+        except Exception as err:
+            log.error("Ошибка отрисовки Treemap: %s", err)
+        finally:
+            # Всегда завершаем работу painter, чтобы Qt не ругался
+            p.end()
 
     def mousePressEvent(self, event):
         # Ищем, по какому квадрату кликнули
-        for rect, name in self.rects:
-            if rect.contains(event.pos()):
-                # Если это папка (добавляем текущий путь), можно эмитить сигнал
-                self.folder_clicked.emit(name)
-                break
+        if event.button() == Qt.LeftButton:
+            for rect, name in self.rects:
+                if rect.contains(event.pos()):
+                    # Если это папка (добавляем текущий путь), можно эмитить сигнал
+                    self.folder_clicked.emit(name)
+                    break
 
 
 class HeatmapWidget(QWidget):
+    """Распределение размера диска по расширениям файлов."""
+
     def __init__(self):
         super().__init__()
         self.layout = QVBoxLayout(self)
         self.layout.addWidget(QLabel("<b>Распределение по расширениям:</b>"))
+        self.layout.addStretch()
 
     def update_data(self, data):
-        for i in reversed(range(1, self.layout.count())):
-            self.layout.itemAt(i).widget().deleteLater()
+        # Очищаем старые виджеты (оставляем заголовок и stretch)
+        while self.layout.count() > 2:
+            item = self.layout.takeAt(1)
+            if item.widget():
+                item.widget().deleteLater()
+
         exts = {}
+
+        # for i in reversed(range(1, self.layout.count())):
+        #     self.layout.itemAt(i).widget().deleteLater()
+        # exts = {}
+        # for e in data:
+        #     exts[Path(e["name"]).suffix.lower() or "no_ext"] = (
+        #         exts.get(Path(e["name"]).suffix.lower() or "no_ext", 0)
+        #         + e["size"]
+        #     )
         for e in data:
-            exts[Path(e["name"]).suffix.lower() or "no_ext"] = (
-                exts.get(Path(e["name"]).suffix.lower() or "no_ext", 0)
-                + e["size"]
-            )
+            ext = Path(e["name"]).suffix.lower() or "no_ext"
+            exts[ext] = exts.get(ext, 0) + e["size"]
+
         total = sum(exts.values()) or 1
         for ext, size in sorted(
             exts.items(), key=lambda x: x[1], reverse=True
@@ -217,13 +251,14 @@ class HeatmapWidget(QWidget):
             bar.setValue(int((size / total) * 100))
             bar.setFormat(f"{ext} ({human_size(size)}) - %p%")
             self.layout.addWidget(bar)
+            self.layout.insertWidget(self.layout.count() - 1, bar)
 
 
 class DiskAnalysisTab(QWidget):
     find_duplicates_requested = Signal(str)
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.workers = []
         self.history = []
         self.hist_idx = -1
@@ -232,41 +267,89 @@ class DiskAnalysisTab(QWidget):
 
     def _build_ui(self):
         lay = QVBoxLayout(self)
-        # Верх
+        lay.setContentsMargins(16, 16, 16, 16)
+        lay.setSpacing(10)
+
+        # --- Верхняя панель (Диски и Путь) ---
         top = QHBoxLayout()
-        self.btn_back = QPushButton("←")
-        self.btn_back.clicked.connect(self._go_back)
-        self.btn_fwd = QPushButton("→")
-        self.btn_fwd.clicked.connect(self._go_fwd)
-        self.lbl_path = QLabel("/")
-        self.lbl_path.setStyleSheet("font-weight: bold;")
-        self.search = QLineEdit()
-        self.search.setPlaceholderText("Поиск...")
-        self.search.textChanged.connect(self._filter)
 
         top.addWidget(QLabel("Диск:"))
         self.combo = QComboBox()
         self.combo.currentIndexChanged.connect(self._on_drive)
         top.addWidget(self.combo)
+
         top.addWidget(QLabel("Путь:"))
         self.path_edit = QLineEdit()
+        self.path_edit.returnPressed.connect(self._start)
         top.addWidget(self.path_edit, 1)
-        top.addWidget(QPushButton("Обзор", clicked=self._browse))
-        top.addWidget(QPushButton("Анализ", clicked=self._start))
+
+        self.btn_browse = QPushButton("Обзор")
+        self.btn_browse.clicked.connect(self._browse)
+        top.addWidget(self.btn_browse)
+
+        self.btn_start = QPushButton("Анализировать")
+        self.btn_start.setProperty("class", "primary")
+        self.btn_start.clicked.connect(self._start)
+        top.addWidget(self.btn_start)
         lay.addLayout(top)
 
+        # --- ПРОГРЕСС-БАР (НОВОЕ) ---
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 0)  # Режим "бегущей строки" (indeterminate)
+        self.progress.setTextVisible(True)
+        self.progress.hide()  # Скрыт по умолчанию
+        lay.addWidget(self.progress)
+
+        # --- Навигация и Поиск ---
         nav = QHBoxLayout()
+
+        self.btn_back = QPushButton()
+        self.btn_back.setIcon(
+            QApplication.style().standardIcon(QStyle.SP_ArrowBack)
+        )
+        self.btn_back.setFixedWidth(30)
+        self.btn_back.clicked.connect(self._go_back)
+
+        self.btn_fwd = QPushButton()
+        self.btn_fwd.setIcon(
+            QApplication.style().standardIcon(QStyle.SP_ArrowForward)
+        )
+        self.btn_fwd.setFixedWidth(30)
+        self.btn_fwd.clicked.connect(self._go_fwd)
+
+        self.lbl_path = QLabel("/")
+        self.lbl_path.setStyleSheet("font-weight: bold; color: #2563eb;")
+
+        self.search = QLineEdit()
+        self.search.setPlaceholderText(
+            "🔍 Поиск по имени файла или папки в дереве..."
+        )
+        self.search.textChanged.connect(self._filter)
+
         nav.addWidget(self.btn_back)
         nav.addWidget(self.btn_fwd)
         nav.addWidget(self.lbl_path, 1)
         nav.addWidget(self.search)
         lay.addLayout(nav)
 
-        # Контент
-        self.split = QSplitter()
+        # --- Основной контент ---
+        self.split = QSplitter(Qt.Horizontal)
+
+        # Дерево
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["Имя", "Размер", "Процент", "Файлов"])
         self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.tree.header().setSectionResizeMode(
+            1, QHeaderView.ResizeToContents
+        )
+        self.tree.header().setSectionResizeMode(
+            2, QHeaderView.Fixed
+        )  # Фиксируем ширину для полоски
+        self.tree.header().setSectionResizeMode(
+            3, QHeaderView.ResizeToContents
+        )
+        self.tree.setColumnWidth(2, 150)  # <--- Ширина колонки "Процент"
+
         self.tree.setItemDelegateForColumn(2, PercentDelegate(self.tree))
         self.tree.setSortingEnabled(True)
         self.tree.itemExpanded.connect(self._expand)
@@ -278,6 +361,7 @@ class DiskAnalysisTab(QWidget):
             )
         )
 
+        # Горячие клавиши
         QShortcut(
             QKeySequence("Delete"),
             self.tree,
@@ -298,76 +382,112 @@ class DiskAnalysisTab(QWidget):
 
         self.split.addWidget(self.tree)
 
+        # Правая панель с вкладками (Карта, Топ, Типы)
         self.right_tabs = QTabWidget()
+
         self.treemap = TreemapWidget()
         self.treemap.folder_clicked.connect(self._on_treemap_click)
         self.right_tabs.addTab(self.treemap, "Карта")
+
         self.top_files = QListWidget()
         self.right_tabs.addTab(self.top_files, "Топ файлов")
+
         self.heatmap = HeatmapWidget()
         self.right_tabs.addTab(self.heatmap, "Типы")
+
         self.split.addWidget(self.right_tabs)
         self.split.setSizes([600, 400])
         lay.addWidget(self.split, 1)
+
         self._populate_drives()
 
     def _populate_drives(self):
-        self.combo.addItem("Выберите...", "")
+        self.combo.blockSignals(True)
+        self.combo.addItem("Выберите диск...", "")
         for part in psutil.disk_partitions(all=False):
             if not part.mountpoint:
                 continue
             try:
                 u = psutil.disk_usage(part.mountpoint)
+                free_gb = u.free / (1024**3)
                 self.combo.addItem(
-                    f"💽 {part.device} ({u.free//(1024**3)}GB free)",
+                    f"💽 {part.device} ({free_gb:.1f}GB free)",
                     part.mountpoint,
                 )
             except:
                 pass
 
+        self.combo.blockSignals(False)
+
     def _on_drive(self, i):
         p = self.combo.itemData(i)
         if p:
             self.path_edit.setText(p)
-            self._start()
 
     def _browse(self):
-        d = QFileDialog.getExistingDirectory(self)
+        d = QFileDialog.getExistingDirectory(self, "Выберите папку")
         if d:
             self.path_edit.setText(d)
-            self._start()
 
     def _start(self):
         p = self.path_edit.text().strip()
         if not os.path.isdir(p):
-            return
+            return QMessageBox.warning(
+                self, "Ошибка", "Укажите существующую папку"
+            )
+
+        # Отключаем кнопку, чтобы избежать двойных кликов
+        self.btn_start.setEnabled(False)
+        self.btn_start.setText("Анализ...")
+
+        # Показываем прогресс-бар
+        self.progress.show()
+
         self.tree.clear()
         self.treemap.set_data({})
         self.top_files.clear()
+
         self.lbl_path.setText(p)
         self.history.append(p)
         self.hist_idx = len(self.history) - 1
+
         self._run_worker(p, self._fill_root, p)
 
     def _run_worker(self, p, cb, *args):
         w = FolderScannerWorker(p)
         w.finished_ok.connect(lambda d: cb(*args, d) if args else cb(d))
+
+        w.progress.connect(
+            self.progress.setFormat
+        )  # НОВОЕ: Передаем имя текущей папки в прогресс-бар
         w.finished.connect(
             lambda: self.workers.remove(w) if w in self.workers else None
         )
+
         self.workers.append(w)
         w.start()
 
     def _fill_root(self, p, data):
+        # Очищаем дерево перед заполнением на случай, если остались старые данные
+        self.tree.clear()
+
         self._add_items(self.tree, data, sum(x["size"] for x in data))
+        # Обновляем правую панель
         self.treemap.set_data({x["name"]: x["size"] for x in data[:20]})
         self.heatmap.update_data(data)
+
         self.top_files.clear()
         for x in data:
             if not x["is_dir"]:
                 self.top_files.addItem(
-                    f"{human_size(x['size'])} — {x['name']}"
+                    f"{human_size(x['size']):>10} — {x['name']}"
                 )
+
+        # Включаем кнопку обратно
+        self.btn_start.setEnabled(True)
+        self.btn_start.setText("Анализировать")
+        self.progress.hide()  # Скрываем прогресс-бар
+
         # Уведомление
         main_win = self.window()
         if hasattr(main_win, "notify"):
@@ -376,6 +496,7 @@ class DiskAnalysisTab(QWidget):
             )
 
     def _expand(self, item):
+        """Ленивая загрузка при раскрытии папки."""
         if item.childCount() == 1 and item.child(0).text(0) == "...":
             item.takeChildren()
             self._run_worker(item.data(0, Qt.UserRole), self._fill_child, item)
@@ -386,20 +507,26 @@ class DiskAnalysisTab(QWidget):
     def _add_items(self, parent, data, total):
         now = time.time()
         for e in data:
-            it = QTreeWidgetItem(parent)
+            # Используем кастомный TreeItem
+            it = TreeItem(parent)
             it.setText(0, e["name"])
             it.setText(1, human_size(e["size"]))
             it.setText(3, str(e["files"]))
+
             it.setData(1, Qt.UserRole, e["size"])
             it.setData(0, Qt.UserRole, e["path"])
-            it.setData(
-                2, Qt.UserRole, (e["size"] / total * 100) if total else 0
-            )
+
+            percent = (e["size"] / total * 100) if total else 0
+            it.setData(2, Qt.UserRole, percent)
+            it.setText(
+                2, f"{percent:.1f}%"
+            )  # Запасной текст, если делегат отключится
 
             if e["error"]:
                 it.setText(2, e["error"])
                 it.setForeground(2, QColor("red"))
             elif e["is_dir"]:
+                # Добавляем пустышку для ленивой загрузки
                 QTreeWidgetItem(it).setText(0, "...")
             else:
                 # Подсветка старых файлов (старше 1 года)
@@ -411,9 +538,40 @@ class DiskAnalysisTab(QWidget):
                     it.setToolTip(0, "Файл не изменялся более года")
 
     def _filter(self, text):
+        """Поиск по дереву."""
+        text = text.lower()
+
+        def check_item(item):
+            # Проверяем совпадение в текущем элементе
+            match = text in item.text(0).lower()
+            child_match = False
+
+            # Рекурсивно проверяем всех детей
+            for i in range(item.childCount()):
+                if check_item(item.child(i)):
+                    child_match = True
+
+            # Показываем элемент, если он сам совпал или совпал кто-то из его детей
+            is_visible = match or child_match
+            item.setHidden(not is_visible)
+
+            # Автоматически раскрываем папку, если внутри есть совпадения
+            if child_match and text:
+                item.setExpanded(True)
+
+            return is_visible
+
+        # Запускаем проверку для всех корневых элементов
         for i in range(self.tree.topLevelItemCount()):
-            it = self.tree.topLevelItem(i)
-            it.setHidden(text.lower() not in it.text(0).lower())
+            check_item(self.tree.topLevelItem(i))
+
+    def _on_treemap_click(self, folder_name):
+        """Открывает папку, по которой кликнули в Treemap."""
+        current = Path(self.path_edit.text().strip())
+        new_path = current / folder_name.strip("\\")
+        if new_path.is_dir():
+            self.path_edit.setText(str(new_path))
+            self._start()
 
     def _menu(self, pos):
         it = self.tree.itemAt(pos)
@@ -431,9 +589,10 @@ class DiskAnalysisTab(QWidget):
                 tp = tp.parent
             self.find_duplicates_requested.emit(str(tp))
 
-        m.addAction("Искать дубликаты", lambda: _trigger_search(p))
+        m.addAction("Искать дубликаты здесь", lambda: _trigger_search(p))
         m.addSeparator()
-        m.addAction("В корзину", lambda: self._del(it, True))
+
+        m.addAction("Удалить в корзину", lambda: self._del(it, True))
         m.addAction("Удалить навсегда", lambda: self._del(it, False))
         m.exec(self.tree.viewport().mapToGlobal(pos))
 
@@ -456,6 +615,7 @@ class DiskAnalysisTab(QWidget):
                     shutil.rmtree(p)
             else:
                 delete_file(Path(p), trash)
+            # Обновляем родителя
             parent = it.parent()
             if parent:
                 parent.removeChild(it)
@@ -468,6 +628,7 @@ class DiskAnalysisTab(QWidget):
             QMessageBox.critical(self, "Ошибка", str(e))
 
     def _refresh(self, item, data):
+        """Обновляет размер папки после удаления файла."""
         item.takeChildren()
         self._add_items(item, data, sum(x["size"] for x in data))
 
@@ -483,6 +644,7 @@ class DiskAnalysisTab(QWidget):
             self.path_edit.setText(self.history[self.hist_idx])
             self._start()
 
+    # --- Drag & Drop ---
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():
             for url in e.mimeData().urls():
@@ -501,11 +663,3 @@ class DiskAnalysisTab(QWidget):
                     e.acceptProposedAction()
                     return
         e.ignore()
-
-    def _on_treemap_click(self, folder_name):
-        """Открывает папку, по которой кликнули в Treemap."""
-        current = Path(self.path_edit.text().strip())
-        new_path = current / folder_name.strip("\\")
-        if new_path.is_dir():
-            self.path_edit.setText(str(new_path))
-            self._start()

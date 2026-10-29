@@ -11,20 +11,25 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QStackedWidget,
     QMessageBox,
-    QFileDialog,
     QSystemTrayIcon,
     QMenu,
     QStyle,
 )
-from PySide6.QtCore import Qt, QSettings, QTimer  # <--- Добавлен QTimer
+from PySide6.QtCore import Qt, QSettings, QTimer
 
+# Импорты вкладок
 from gui.scan_tab import ScanTab
 from gui.disk_analysis_tab import DiskAnalysisTab
 from gui.space_hogs_tab import SpaceHogsTab
 from gui.junk_cleaner_tab import JunkCleanerTab
+
+# Импорты менеджеров и диалогов
 from gui.theme_manager import ThemeManager
+from gui.dialogs import HistoryDialog
+
+
 from utils import settings as user_settings
-from utils.config import APP_NAME, APP_VERSION, AUTOSAVE_FILE
+from utils.config import APP_NAME, APP_VERSION, AUTOSAVE_FILE, ORG_NAME
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +42,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(900, 620)
 
         # Сохранение геометрии
-        self.settings = QSettings("DupFinder", "Duplicate Finder")
+        self.settings = QSettings(ORG_NAME, APP_NAME)
         geom = self.settings.value("window/geometry")
         if geom:
             self.restoreGeometry(geom)
@@ -73,12 +78,17 @@ class MainWindow(QMainWindow):
         # Контент (справа)
         self.stack = QStackedWidget()
 
-        # Добавляем вкладки
+        # Создаем вкладки и сохраняем ссылки на них для прямого доступа
+        self.scan_tab = ScanTab()
+        self.disk_tab = DiskAnalysisTab()
+        self.hogs_tab = SpaceHogsTab()
+        self.junk_tab = JunkCleanerTab()
+
         self.pages = [
-            ("🔍 Поиск дубликатов", ScanTab()),
-            ("📊 Анализ диска", DiskAnalysisTab()),
-            ("🐷 Большие файлы", SpaceHogsTab()),
-            ("🧹 Очистка мусора", JunkCleanerTab()),
+            ("🔍 Поиск дубликатов", self.scan_tab),
+            ("📊 Анализ диска", self.disk_tab),
+            ("🐷 Большие файлы", self.hogs_tab),
+            ("🧹 Очистка мусора", self.junk_tab),
         ]
 
         for name, widget in self.pages:
@@ -92,11 +102,10 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.stack, 1)
 
         # Прокидываем сигнал из анализа диска
-        self.disk_tab = self.pages[1][1]
         self.disk_tab.find_duplicates_requested.connect(self._jump_dups)
 
         # Сохранение ширины колонок (пример для таблицы больших файлов)
-        self.hogs_tab = self.pages[2][1]
+        # self.hogs_tab = self.pages[2][1]
         hogs_state = self.settings.value("hogs_table/header")
         if hogs_state:
             self.hogs_tab.table.horizontalHeader().restoreState(hogs_state)
@@ -125,6 +134,11 @@ class MainWindow(QMainWindow):
         fm = mb.addMenu("Файл")
         fm.addAction("Выход", self.close)
 
+        # Инструменты
+        tm = mb.addMenu("Инструменты")
+        tm.addAction("Очистка кэшей и мусора", self._goto_junk_cleaner)
+        tm.addAction("История операций", lambda: HistoryDialog(self).exec())
+
         # Вид (Темы)
         vm = mb.addMenu("Вид")
         theme_menu = vm.addMenu("Тема")
@@ -137,16 +151,18 @@ class MainWindow(QMainWindow):
             theme_menu.addAction(a)
 
     def _jump_dups(self, path: str):
+        """Переход с вкладки анализа диска на поиск дубликатов по пути."""
         self.sidebar.setCurrentRow(0)
 
         p = Path(path)
         if p.is_file():
             p = p.parent
 
-        self.pages[0][1].path_edit.setText(str(p))
-        self.pages[0][1].mode_combo.setCurrentIndex(0)
+        self.scan_tab.path_edit.setText(str(p))
+        self.scan_tab.mode_combo.setCurrentIndex(0)
 
     def _spin_tray(self):
+        """Управление спиннером в трее"""
         self.tray_spin_state = not self.tray_spin_state
         if self.tray_spin_state:
             self.tray.setIcon(
@@ -165,13 +181,14 @@ class MainWindow(QMainWindow):
         self.tray.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
 
     def notify(self, title, message):
-        """Для вызова из других вкладок."""
+        """Уведомление в системном трее."""
         if self.tray.isSystemTrayAvailable():
             self.tray.showMessage(
                 title, message, QSystemTrayIcon.Information, 3000
             )
 
     def _check_autosave(self):
+        """Проверяет наличие файла автосохранения при запуске."""
         if AUTOSAVE_FILE.exists():
             res = QMessageBox.question(
                 self,
@@ -189,3 +206,13 @@ class MainWindow(QMainWindow):
             self.hogs_tab.table.horizontalHeader().saveState(),
         )
         super().closeEvent(event)
+
+    def _goto_junk_cleaner(self):
+        """Переключает на вкладку очистки мусора и разворачивает окно."""
+        self.sidebar.setCurrentRow(3)  # Индекс вкладки "Очистка мусора"
+        self.showNormal()
+        self.activateWindow()
+
+        # Опционально: можно автоматически запустить сканирование домашней папки
+        # self.junk_tab.path_edit.setText(Path.home().as_posix())
+        # self.junk_tab._scan()

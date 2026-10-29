@@ -1,4 +1,4 @@
-"""Управление темой: применение + сохранение выбора."""
+"""Управление визуальными темами приложения (применение + сохранение)."""
 
 import logging
 
@@ -6,12 +6,9 @@ from PySide6.QtCore import QSettings, QObject, Signal
 from PySide6.QtWidgets import QApplication
 
 from gui.theme import THEMES, DEFAULT_THEME, build_stylesheet
+from utils.config import ORG_NAME, APP_NAME, SETTINGS_THEME_KEY
 
 log = logging.getLogger(__name__)
-
-SETTINGS_ORG = "DupFinder"
-SETTINGS_APP = "Duplicate Finder"
-SETTINGS_KEY = "ui/theme"
 
 
 class ThemeManager(QObject):
@@ -29,8 +26,8 @@ class ThemeManager(QObject):
 
     def __init__(self):
         super().__init__()
-        self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-        self._current = self._settings.value(SETTINGS_KEY, DEFAULT_THEME)
+        self._settings = QSettings(ORG_NAME, APP_NAME)
+        self._current = self._settings.value(SETTINGS_THEME_KEY, DEFAULT_THEME)
         if self._current not in THEMES:
             self._current = DEFAULT_THEME
 
@@ -38,10 +35,11 @@ class ThemeManager(QObject):
 
     @property
     def current(self) -> str:
+        """Ключ текущей активной темы."""
         return self._current
 
     def available(self) -> dict[str, str]:
-        """{ключ: человекочитаемое имя}"""
+        """Возвращает словарь {ключ: человекочитаемое имя} для всех доступных тем."""
         return {k: v["name"] for k, v in THEMES.items()}
 
     def apply(self, theme_key: str) -> None:
@@ -49,19 +47,21 @@ class ThemeManager(QObject):
         if theme_key not in THEMES:
             log.warning("Неизвестная тема: %s — пропускаю", theme_key)
             return
-        if theme_key == self._current:
-            # всё равно применим (на случай, если был сброс)
-            pass
 
         app = QApplication.instance()
         if app is None:
             log.error("QApplication не создан — тема не применена")
             return
 
+        # Применяем стили
         app.setStyleSheet(build_stylesheet(theme_key))
         self._current = theme_key
-        self._settings.setValue(SETTINGS_KEY, theme_key)
+
+        # Сохраняем в настройки
+        self._settings.setValue(SETTINGS_THEME_KEY, theme_key)
         log.info("Тема применена: %s", theme_key)
+
+        # Оповещаем подписчиков (например, если нужно перерисовать кастомные виджеты)
         self.theme_changed.emit(theme_key)
 
     def apply_saved(self) -> None:

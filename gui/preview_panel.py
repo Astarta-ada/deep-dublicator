@@ -26,7 +26,15 @@ from PySide6.QtWidgets import (
     QFrame,
 )
 
-from gui.widgets import human_size
+from utils.helpers import human_size, format_date
+from utils.constants import (
+    IMAGE_EXTS,
+    HEIC_EXTS,
+    RAW_EXTS,
+    VIDEO_EXTS,
+    AUDIO_EXTS,
+    TEXT_EXTS,
+)
 
 log = logging.getLogger(__name__)
 
@@ -76,87 +84,13 @@ try:
 except ImportError:
     HAS_MUTAGEN = False
 
-# ---------- расширения ----------
-
-BASE_IMAGE_EXTS = {
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-    ".bmp",
-    ".webp",
-    ".tiff",
-    ".tif",
-    ".ico",
-    ".svg",
-}
-HEIC_EXTS = {".heic", ".heif", ".avif"}
-RAW_EXTS = {
-    ".cr2",
-    ".cr3",
-    ".nef",
-    ".arw",
-    ".dng",
-    ".raf",
-    ".orf",
-    ".rw2",
-    ".pef",
-    ".srw",
-}
-VIDEO_EXTS = {
-    ".mp4",
-    ".mkv",
-    ".avi",
-    ".mov",
-    ".wmv",
-    ".flv",
-    ".webm",
-    ".m4v",
-    ".mpg",
-    ".mpeg",
-}
-AUDIO_EXTS = {".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".wma", ".opus"}
-TEXT_EXTS = {
-    ".txt",
-    ".py",
-    ".js",
-    ".ts",
-    ".java",
-    ".c",
-    ".cpp",
-    ".h",
-    ".cs",
-    ".go",
-    ".rs",
-    ".rb",
-    ".php",
-    ".html",
-    ".css",
-    ".scss",
-    ".xml",
-    ".json",
-    ".yaml",
-    ".yml",
-    ".ini",
-    ".cfg",
-    ".conf",
-    ".md",
-    ".rst",
-    ".log",
-    ".csv",
-    ".tsv",
-    ".sh",
-    ".bat",
-    ".ps1",
-    ".sql",
-}
 
 TEXT_PREVIEW_LIMIT = 200
 IMAGE_MAX_H = 600
 
 
 def pil_to_pixmap(img) -> QPixmap:
-    """PIL.Image → QPixmap."""
+    """Конвертация PIL.Image в QPixmap."""
     if img.mode != "RGBA":
         img = img.convert("RGBA")
     data = img.tobytes("raw", "RGBA")
@@ -278,9 +212,7 @@ class PreviewPanel(QWidget):
             return
 
         self.name_label.setText(path.name)
-        mtime = datetime.fromtimestamp(st.st_mtime).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        mtime = format_date(st.st_mtime, with_time=True)
         self.meta_label.setText(
             f"<b>Размер:</b> {human_size(st.st_size)}<br>"
             f"<b>Изменён:</b> {mtime}<br>"
@@ -294,7 +226,7 @@ class PreviewPanel(QWidget):
             self._show_image(path, kind="heic")
         elif ext in RAW_EXTS:
             self._show_raw(path)
-        elif ext in BASE_IMAGE_EXTS:
+        elif ext in IMAGE_EXTS:
             self._show_image(path, kind="base")
         elif ext == ".pdf":
             self._show_pdf(path)

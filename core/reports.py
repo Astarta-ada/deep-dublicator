@@ -6,20 +6,12 @@ import logging
 from pathlib import Path
 
 from core.session import Session
+from utils.helpers import human_size
 
 log = logging.getLogger(__name__)
 
 
-def _human_size(num: int) -> str:
-    """Человекочитаемый размер."""
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if num < 1024:
-            return f"{num:.1f} {unit}"
-        num /= 1024
-    return f"{num:.1f} PB"
-
-
-def export_txt(session: Session, path: Path) -> None:
+def export_txt(session: Session, path: Path):  # -> None:
     """Экспорт отчёта в текстовом формате."""
     lines = [
         "Отчёт о дубликатах файлов",
@@ -35,7 +27,7 @@ def export_txt(session: Session, path: Path) -> None:
         tag = " [ПУСТЫЕ]" if g.is_empty_group else ""
         lines.append(
             f"Группа #{i}{tag} — {len(g.files)} файлов, "
-            f"{_human_size(g.size)} каждый"
+            f"{human_size(g.size)} каждый"
         )
         for f in g.files:
             mark = "★" if f.is_original else " "
@@ -46,7 +38,7 @@ def export_txt(session: Session, path: Path) -> None:
     log.info("TXT-отчёт сохранён: %s", path)
 
 
-def export_html(session: Session, path: Path) -> None:
+def export_html(session: Session, path: Path):  # -> None:
     """Экспорт отчёта в HTML."""
     rows: list[str] = []
     for i, g in enumerate(session.groups, 1):
@@ -54,7 +46,7 @@ def export_html(session: Session, path: Path) -> None:
         rows.append(
             f"<h3>Группа #{i}{tag} "
             f"<small>({len(g.files)} файлов, "
-            f"{_human_size(g.size)} каждый)</small></h3>"
+            f"{human_size(g.size)} каждый)</small></h3>"
         )
         rows.append('<table border="1" cellpadding="4" cellspacing="0">')
         rows.append(
@@ -63,27 +55,31 @@ def export_html(session: Session, path: Path) -> None:
         )
         for f in g.files:
             mark = "★" if f.is_original else ""
+            # Конвертируем timestamp в строку
             mt = datetime.datetime.fromtimestamp(f.mtime).strftime(
                 "%Y-%m-%d %H:%M"
             )
             rows.append(
                 f"<tr><td align='center'>{mark}</td>"
                 f"<td><code>{html.escape(f.path)}</code></td>"
-                f"<td align='right'>{_human_size(f.size)}</td>"
+                f"<td align='right'>{human_size(f.size)}</td>"
                 f"<td>{mt}</td></tr>"
             )
         rows.append("</table><br>")
 
+    # Формируем итоговый HTML-документ
     doc = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <title>Отчёт о дубликатах</title>
 <style>
-  body {{ font-family: sans-serif; margin: 24px; }}
-  h1 {{ font-size: 20px; }}
+  body {{ font-family: sans-serif; margin: 24px; background: #f8fafc; color: #0f172a; }}
+  h1 {{ font-size: 20px; color: #2563eb; }}
   h3 {{ margin-bottom: 4px; }}
-  table {{ border-collapse: collapse; width: 100%; }}
-  code {{ font-size: 12px; }}
-  small {{ color: #666; font-weight: normal; }}
+  table {{ border-collapse: collapse; width: 100%; background: white; border-color: #e2e8f0; }}
+  th {{ background: #f1f5f9; padding: 8px; text-align: left; }}
+  td {{ padding: 8px; }}
+  code {{ font-size: 12px; color: #475569; }}
+  small {{ color: #64748b; font-weight: normal; }}
 </style>
 </head><body>
 <h1>Отчёт о дубликатах файлов</h1>
@@ -102,7 +98,7 @@ def export_html(session: Session, path: Path) -> None:
     log.info("HTML-отчёт сохранён: %s", path)
 
 
-def export_deletion_list(session: Session, path: Path) -> None:
+def export_deletion_list(session: Session, path: Path):  # -> None:
     """Список путей дубликатов (без оригиналов) — по одному в строке."""
     lines = []
     for g in session.groups:

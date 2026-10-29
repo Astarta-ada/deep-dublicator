@@ -1,4 +1,4 @@
-"""Хеширование файлов с прогрессом по байтам."""
+"""Вычисление хешей файлов с поддержкой прогресса."""
 
 import hashlib
 import logging
@@ -16,12 +16,16 @@ def hash_file(
     quick: bool = False,
     quick_bytes: int = QUICK_HASH_BYTES,
     progress_cb: Optional[Callable[[int], None]] = None,
-) -> Optional[str]:
+):  # -> Optional[str]:
     """
-    Хеш файла.
+    Вычисляет хеш файла.
 
-    :param progress_cb: вызывается с количеством прочитанных байт после
-                        каждого чанка (для прогресса по байтам).
+    :param path: Путь к файлу.
+    :param algorithm: Алгоритм хеширования (по умолчанию "sha256").
+    :param quick: Если True — читает только первые quick_bytes байт (для быстрой проверки).
+    :param quick_bytes: Количество байт для быстрого чтения.
+    :param progress_cb: Функция обратного вызова, принимает количество прочитанных байт.
+    :return: Hex-строка хеша или None в случае ошибки чтения.
     """
     h = hashlib.new(algorithm)
     try:

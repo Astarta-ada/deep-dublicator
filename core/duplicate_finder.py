@@ -1,39 +1,67 @@
+"""Алгоритмы поиска дубликатов, похожих файлов и ссылок."""
+
+import os
 import logging
 import threading
-import cv2
 import imagehash
 import mutagen
+
+try:
+    import cv2
+
+    HAS_CV2 = True
+except ImportError:
+    HAS_CV2 = False
+
+from PIL import Image
+
 from collections import defaultdict
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterable, Callable, Optional
-from PIL import Image
+
 from core.hasher import hash_file
 from core.hash_cache import HashCache, _NoCache
 from utils.config import EMPTY_FILE_HASH, DEFAULT_HASH_WORKERS
+from utils.constants import (
+    IMAGE_EXTS,
+    HEIC_EXTS,
+    RAW_EXTS,
+    VIDEO_EXTS,
+    AUDIO_EXTS,
+)
 
 log = logging.getLogger(__name__)
+
 ProgressCb = Callable[[str, int, int], None]
 
 
+# ==========================================
+# Ядро: Поиск точных дубликатов по хешу
+# =========================================
+
+
 def _hash_stage(
-    files,
+    files: list[Path],
     cache,
-    quick,
-    workers,
-    done_ref,
-    total_ref,
-    lock,
-    progress_cb,
-    stage_name,
+    quick: bool,
+    workers: int,
+    done_ref: list[int],
+    total_ref: list[int],
+    lock: threading.Lock,
+    progress_cb: Optional[ProgressCb],
+    stage_name: str,
 ):
-    by_hash = defaultdict(list)
+    by_hash: dict[str, list[Path]] = defaultdict(list)
 
     def worker(path: Path):
         try:
             st = path.stat()
         except OSError:
             return path, None
+
+        # Проверка кэша (только для полного хеша)
         if not quick:
             cached = cache.get(path, st.st_size, st.st_mtime)
             if cached:
@@ -64,21 +92,25 @@ def _hash_stage(
 
 def find_duplicates(
     files: Iterable[Path],
-    progress_cb=None,
-    include_empty=False,
-    use_cache=True,
-    workers=4,
-):
-    by_size = defaultdict(list)
+    progress_cb: Optional[ProgressCb] = None,
+    include_empty: bool = False,
+    use_cache: bool = True,
+    workers: int = DEFAULT_HASH_WORKERS,
+):  # -> dict[str, list[Path]]:
+    """Трехступенчатый поиск точных дубликатов: размер → быстрый хеш → полный хеш."""
+    by_size: dict[int, list[Path]] = defaultdict(list)
     for f in files:
         try:
             by_size[f.stat().st_size].append(f)
         except OSError:
-            pass
-    result = {}
+            continue
+    result: dict[str, list[Path]] = {}
+
+    # Отдельная группа для пустых файлов
     if include_empty and 0 in by_size and len(by_size[0]) > 1:
         result[EMPTY_FILE_HASH] = list(by_size[0])
     by_size.pop(0, None)
+
     candidates = [f for g in by_size.values() if len(g) > 1 for f in g]
     if not candidates:
         return result
@@ -87,6 +119,7 @@ def find_duplicates(
     lock = threading.Lock()
     done = [0]
     try:
+        # Этап 1: Быстрый хеш
         total_q = sum(f.stat().st_size for f in candidates if f.exists())
         total_ref = [total_q]
         if progress_cb:
@@ -106,6 +139,7 @@ def find_duplicates(
         if not candidates:
             return result
 
+        # Этап 2: Полный хеш
         done[0] = 0
         total_f = sum(f.stat().st_size for f in candidates if f.exists())
         total_ref[0] = total_f
@@ -130,7 +164,13 @@ def find_duplicates(
     return result
 
 
-def find_by_name(files: list[Path]) -> dict[str, list[Path]]:
+# ==========================================
+# Специализированные поиски (Фото, Видео, Аудио, Имена)
+# ==========================================
+
+
+def find_by_name(files: list[Path]):  # -> dict[str, list[Path]]:
+    """Группирует файлы с одинаковыми именами."""
     groups = defaultdict(list)
     for f in files:
         groups[f.name.lower()].append(f)
@@ -138,11 +178,13 @@ def find_by_name(files: list[Path]) -> dict[str, list[Path]]:
 
 
 def find_similar_images(
-    files: list[Path], threshold=8
-) -> dict[str, list[Path]]:
+    files: list[Path], threshold: int = 8
+):  # -> dict[str, list[Path]]:
+    """Поиск визуально похожих изображений через Perceptual Hash."""
+    valid_exts = IMAGE_EXTS | HEIC_EXTS | RAW_EXTS
     hashes = {}
     for f in files:
-        if f.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}:
+        if f.suffix.lower() not in valid_exts:
             continue
         try:
             with Image.open(f) as img:
@@ -158,7 +200,7 @@ def find_similar_images(
         for p2, h2 in hashes.items():
             if p2 in processed:
                 continue
-            if h1 - h2 <= threshold:
+            if h1 - h2 <= threshold:  # Расстояние Хэмминга
                 group.append(p2)
                 processed.add(p2)
         if len(group) > 1:
@@ -167,11 +209,17 @@ def find_similar_images(
 
 
 def find_similar_videos(
-    files: list[Path], threshold=8
-) -> dict[str, list[Path]]:
+    files: list[Path], threshold: int = 8
+):  # -> dict[str, list[Path]]:
+    """Поиск похожих видео по первому кадру (требует OpenCV)."""
+
+    if not HAS_CV2:
+        log.warning("OpenCV не установлен, поиск видео невозможен")
+        return {}
+
     hashes = {}
     for f in files:
-        if f.suffix.lower() not in {".mp4", ".mkv", ".avi", ".mov"}:
+        if f.suffix.lower() not in VIDEO_EXTS:
             continue
         try:
             cap = cv2.VideoCapture(str(f))
@@ -199,10 +247,12 @@ def find_similar_videos(
     return groups
 
 
-def find_audio_duplicates(files: list[Path]) -> dict[str, list[Path]]:
+def find_audio_duplicates(files: list[Path]):  # -> dict[str, list[Path]]:
+    """Поиск аудио с одинаковыми ID3-тегами (Исполнитель - Название)."""
+
     groups = {}
     for f in files:
-        if f.suffix.lower() not in {".mp3", ".flac", ".m4a", ".ogg", ".wav"}:
+        if f.suffix.lower() not in AUDIO_EXTS:
             continue
         try:
             audio = mutagen.File(str(f), easy=True)
@@ -214,7 +264,8 @@ def find_audio_duplicates(files: list[Path]) -> dict[str, list[Path]]:
     return {k: v for k, v in groups.items() if len(v) > 1}
 
 
-def find_zero_fill_files(files: list[Path]) -> dict[str, list[Path]]:
+def find_zero_fill_files(files: list[Path]):  # -> dict[str, list[Path]]:
+    """Поиск мусорных файлов, забитых нулями (от 1 МБ)."""
     zero_files = []
     for f in files:
         try:
@@ -228,19 +279,19 @@ def find_zero_fill_files(files: list[Path]) -> dict[str, list[Path]]:
     return {"ZERO_FILL": zero_files} if len(zero_files) > 1 else {}
 
 
+# ==========================================
+# Поиск ссылок (Симлинки и Хардлинки)
+# ==========================================
+
+
 def find_links_to_file(
     target_file: Path, files: list[Path]
-) -> dict[str, list[Path]]:
-    """Ищет все символьные и жесткие ссылки, указывающие на target_file."""
+):  # -> dict[str, list[Path]]:
+    """
+    Ищет все символьные и жесткие ссылки, указывающие на target_file.
+    Использует кроссплатформенный os.path.samefile.
+    """
     if not target_file.exists():
-        return {}
-
-    target_file = target_file.resolve()
-    try:
-        target_stat = target_file.stat()
-        target_ino = target_stat.st_ino
-        target_dev = target_stat.st_dev
-    except OSError:
         return {}
 
     found_links = []
@@ -250,18 +301,9 @@ def find_links_to_file(
             continue
 
         try:
-            # 1. Проверка на символьную ссылку
-            if f.is_symlink():
-                if f.resolve() == target_file:
-                    found_links.append(f)
-                continue
-
-            # 2. Проверка на жесткую ссылку
-            st = f.stat()
-            if st.st_ino == target_ino and st.st_dev == target_dev:
+            if os.path.samefile(f, target_file):
                 found_links.append(f)
-
-        except OSError:
+        except (OSError, FileNotFoundError):
             continue
 
     # Если нашли хотя бы одну ссылку, группируем их с оригиналом

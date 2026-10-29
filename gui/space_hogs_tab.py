@@ -1,7 +1,9 @@
+"""Вкладка поиска больших файлов (Space Hogs)."""
+
 import os
+import logging
 from pathlib import Path
-from datetime import datetime
-from PySide6.QtCore import Qt, QThread, Signal, QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QWidget,
@@ -20,47 +22,14 @@ from PySide6.QtWidgets import (
 )
 from gui.widgets import human_size
 from core.file_ops import delete_file
+from core.workers import HogsScanner
+
+log = logging.getLogger(__name__)
 
 
-class HogsScanner(QThread):
-    finished_ok = Signal(list)
-
-    def __init__(self, root, min_size, older_than_days):
-        super().__init__()
-        self.root = root
-        self.min_size = min_size
-        self.older_than_days = older_than_days
-
-    def run(self):
-        results = []
-        now = datetime.now().timestamp()
-        for dirpath, _, filenames in os.walk(self.root):
-            for f in filenames:
-                try:
-                    p = Path(dirpath) / f
-                    st = p.stat()
-                    if st.st_size >= self.min_size:
-                        if self.older_than_days > 0:
-                            days_old = (now - st.st_mtime) / (24 * 3600)
-                            if days_old < self.older_than_days:
-                                continue
-                        results.append(
-                            (
-                                str(p),
-                                st.st_size,
-                                datetime.fromtimestamp(st.st_mtime).strftime(
-                                    "%Y-%m-%d"
-                                ),
-                            )
-                        )
-                except OSError:
-                    pass
-        results.sort(key=lambda x: x[1], reverse=True)
-        self.finished_ok.emit(results)
-
-
-# Кастомный элемент таблицы для правильной сортировки размеров
 class SizeItem(QTableWidgetItem):
+    """Кастомный элемент таблицы для правильной числовой сортировки размеров."""
+
     def __init__(self, size_bytes):
         super().__init__(human_size(size_bytes))
         self.size_bytes = size_bytes
@@ -79,13 +48,19 @@ class SpaceHogsTab(QWidget):
 
     def _build_ui(self):
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 16, 16, 16)
+        lay.setSpacing(10)
 
+        # --- Верхняя панель фильтров ---
         top = QHBoxLayout()
         self.path_edit = QLineEdit()
         self.path_edit.setPlaceholderText("Папка для поиска...")
         top.addWidget(QLabel("Папка:"))
         top.addWidget(self.path_edit, 1)
-        top.addWidget(QPushButton("Обзор", clicked=self._browse))
+
+        btn_browse = QPushButton("Обзор...")
+        btn_browse.clicked.connect(self._browse)
+        top.addWidget(btn_browse)
 
         self.size_combo = QComboBox()
         self.size_combo.addItem("> 100 МБ", 100 * 1024 * 1024)
@@ -107,10 +82,12 @@ class SpaceHogsTab(QWidget):
         top.addWidget(self.btn_start)
         lay.addLayout(top)
 
-        self.status = QLabel("Готово")
+        # --- Статус ---
+        self.status = QLabel("Готово к работе")
         self.status.setObjectName("statusLabel")
         lay.addWidget(self.status)
 
+        # --- Таблица результатов ---
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["Файл", "Размер", "Изменён"])
         self.table.horizontalHeader().setSectionResizeMode(
@@ -130,17 +107,24 @@ class SpaceHogsTab(QWidget):
         lay.addWidget(self.table)
 
     def _browse(self):
-        d = QFileDialog.getExistingDirectory(self)
+        d = QFileDialog.getExistingDirectory(self, "Выберите папку")
         if d:
             self.path_edit.setText(d)
 
     def _start(self):
         p = self.path_edit.text().strip()
         if not os.path.isdir(p):
-            return QMessageBox.warning(self, "Ошибка", "Укажите папку")
+            return QMessageBox.warning(
+                self, "Ошибка", "Укажите существующую папку"
+            )
         self.btn_start.setEnabled(False)
         self.table.setRowCount(0)
         self.status.setText("Сканирование...")
+
+        # Запускаем спиннер в трее
+        main_win = self.window()
+        if hasattr(main_win, "start_tray_spinner"):
+            main_win.start_tray_spinner()
 
         self.worker = HogsScanner(
             p, self.size_combo.currentData(), self.old_combo.currentData()
@@ -152,23 +136,32 @@ class SpaceHogsTab(QWidget):
         self.btn_start.setEnabled(True)
         self.status.setText(f"Найдено файлов: {len(res)}")
 
-        # 1. Отключаем сортировку ПЕРЕД заполнением (КРИТИЧНО!)
+        # 1. Получаем ссылку на главное окно один раз
+        main_win = self.window()
+
+        # 2. Останавливаем спиннер
+        if hasattr(main_win, "stop_tray_spinner"):
+            main_win.stop_tray_spinner()
+
+        # 3. Отключаем сортировку ПЕРЕД заполнением (КРИТИЧНО для правильного отображения!)
         self.table.setSortingEnabled(False)
         self.table.setRowCount(len(res))
 
         for i, (path, size, date) in enumerate(res):
             item_path = QTableWidgetItem(path)
-            item_size = SizeItem(size)  # Используем наш кастомный класс
+            item_size = SizeItem(
+                size
+            )  # Кастомный класс для правильной сортировки размеров
             item_date = QTableWidgetItem(date)
 
             self.table.setItem(i, 0, item_path)
             self.table.setItem(i, 1, item_size)
             self.table.setItem(i, 2, item_date)
 
-        # 2. Включаем сортировку обратно, когда всё загружено
+        # 4. Включаем сортировку обратно
         self.table.setSortingEnabled(True)
 
-        main_win = self.window()
+        # 5. Отправляем уведомление (используем ту же переменную main_win)
         if hasattr(main_win, "notify"):
             main_win.notify(
                 "Большие файлы", f"Поиск завершен. Найдено: {len(res)}"
@@ -202,6 +195,7 @@ class SpaceHogsTab(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", str(e))
 
+    # --- Drag & Drop ---
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():
             for url in e.mimeData().urls():

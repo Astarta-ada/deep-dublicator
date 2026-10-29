@@ -2,11 +2,10 @@
 
 import csv
 import logging
-import time
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal, QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QWidget,
@@ -28,252 +27,20 @@ from PySide6.QtWidgets import (
     QSlider,
 )
 
-from core.scanner import scan_directory
-from core.duplicate_finder import (
-    find_duplicates,
-    find_similar_images,
-    find_similar_videos,
-    find_audio_duplicates,
-    find_zero_fill_files,
-    find_by_name,
-    find_links_to_file,
-)
-from core.file_ops import apply_action_to_group, rename_duplicates
+
 from core.session import save_session, load_session, build_session_from_groups
 from core.reports import export_txt, export_html, export_deletion_list
+from core.workers import ScanWorker, ApplyWorker
 from gui.filter_panel import FilterPanel
 from gui.preview_panel import PreviewPanel
 from gui.result_filter_bar import ResultFilterBar
 from gui.widgets import DuplicateGroupWidget, CategoryGroupWidget, human_size
+from gui.dialogs import DiffDialog, SliderDialog
 from utils import settings as user_settings
 from utils.config import EMPTY_FILE_HASH, DEFAULT_HASH_WORKERS, AUTOSAVE_FILE
+from utils.constants import TEXT_EXTS, IMAGE_EXTS, get_category
 
 log = logging.getLogger(__name__)
-
-TEXT_EXTS = {
-    ".txt",
-    ".py",
-    ".js",
-    ".ts",
-    ".java",
-    ".c",
-    ".cpp",
-    ".h",
-    ".cs",
-    ".go",
-    ".rs",
-    ".rb",
-    ".php",
-    ".html",
-    ".css",
-    ".scss",
-    ".xml",
-    ".json",
-    ".yaml",
-    ".yml",
-    ".ini",
-    ".cfg",
-    ".conf",
-    ".md",
-    ".rst",
-    ".log",
-    ".csv",
-    ".tsv",
-    ".sh",
-    ".bat",
-    ".ps1",
-    ".sql",
-}
-
-CATEGORIES = {
-    "🖼 Изображения": {
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".gif",
-        ".bmp",
-        ".webp",
-        ".tiff",
-        ".svg",
-        ".heic",
-    },
-    "🎬 Видео": {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm"},
-    "🎵 Аудио": {".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a"},
-    "📄 Документы": {
-        ".pdf",
-        ".doc",
-        ".docx",
-        ".xls",
-        ".xlsx",
-        ".ppt",
-        ".pptx",
-        ".txt",
-        ".rtf",
-        ".odt",
-    },
-    "🗜 Архивы": {".zip", ".rar", ".7z", ".tar", ".gz", ".bz2"},
-    "💻 Код и скрипты": {
-        ".py",
-        ".js",
-        ".ts",
-        ".java",
-        ".c",
-        ".cpp",
-        ".h",
-        ".cs",
-        ".go",
-        ".rs",
-        ".html",
-        ".css",
-        ".json",
-        ".xml",
-    },
-}
-
-
-def get_category(ext: str) -> str:
-    ext = ext.lower()
-    for cat, exts in CATEGORIES.items():
-        if ext in exts:
-            return cat
-    return "📦 Другие файлы"
-
-
-class ScanWorker(QThread):
-    progress_msg = Signal(str)
-    progress_bytes = Signal(str, int, int, float)
-    finished_ok = Signal(dict)
-    failed = Signal(str)
-
-    def __init__(
-        self,
-        root,
-        recursive,
-        min_size,
-        max_size,
-        extensions,
-        include_empty,
-        use_cache,
-        mode,
-        globs,
-        phash,
-        target_file=None,
-    ):
-        super().__init__()
-        self.root = root
-        self.recursive = recursive
-        self.min_size = min_size
-        self.max_size = max_size
-        self.extensions = extensions
-        self.include_empty = include_empty
-        self.use_cache = use_cache
-        self.mode = mode
-        self.globs = globs
-        self.phash = phash
-        self.target_file = Path(target_file) if target_file else None
-
-    def run(self):
-        try:
-            self.progress_msg.emit("Сканирование директории…")
-            is_links = self.mode == "links"
-            files = list(
-                scan_directory(
-                    self.root,
-                    self.recursive,
-                    self.min_size,
-                    self.max_size,
-                    self.extensions,
-                    exclude_globs=self.globs,
-                    include_links=is_links,
-                )
-            )
-            self.progress_msg.emit(f"Найдено {len(files)} файлов. Анализ…")
-
-            start = time.time()
-
-            def cb(stage, done, total):
-                el = time.time() - start
-                speed = done / el if el > 0 else 0
-                eta = (total - done) / speed if speed > 0 else 0
-                self.progress_bytes.emit(stage, done, total, eta)
-
-            if self.mode == "strict":
-                res = find_duplicates(
-                    files,
-                    cb,
-                    self.include_empty,
-                    self.use_cache,
-                    DEFAULT_HASH_WORKERS,
-                )
-            elif self.mode == "similar_img":
-                res = find_similar_images(files, self.phash)
-            elif self.mode == "similar_vid":
-                res = find_similar_videos(files, self.phash)
-            elif self.mode == "audio":
-                res = find_audio_duplicates(files)
-            elif self.mode == "name":
-                res = find_by_name(files)
-            elif self.mode == "zero":
-                res = find_zero_fill_files(files)
-            elif self.mode == "links":
-                if not self.target_file or not self.target_file.exists():
-                    raise ValueError(
-                        "Целевой файл не выбран или не существует"
-                    )
-                self.progress_msg.emit("Поиск ссылок…")
-                res = find_links_to_file(self.target_file, files)
-            else:
-                res = {}
-
-            self.finished_ok.emit(res)
-        except Exception as e:
-            log.exception("Ошибка сканирования")
-            self.failed.emit(str(e))
-
-
-class ApplyWorker(QThread):
-    """Фоновый поток для удаления/замены файлов, чтобы интерфейс не зависал."""
-
-    progress = Signal(int, int)
-    finished_ok = Signal(int, list)
-
-    def __init__(self, groups, action, backup_dir, base_root, dry_run):
-        super().__init__()
-        self.groups = groups
-        self.action = action
-        self.backup_dir = backup_dir
-        self.base_root = base_root
-        self.dry_run = dry_run
-
-    def run(self):
-        total_ok = 0
-        all_errors = []
-        total_targets = sum(g.selected_count() for g in self.groups)
-        processed = 0
-
-        for g in list(self.groups):
-            o, targets = g.get_selection()
-            if not targets:
-                continue
-
-            if self.action == "rename":
-                a, b = rename_duplicates(o, targets, self.dry_run)
-            else:
-                a, b = apply_action_to_group(
-                    o,
-                    targets,
-                    self.action,
-                    self.backup_dir,
-                    self.base_root,
-                    self.dry_run,
-                )
-
-            total_ok += a
-            all_errors.extend(b)
-            processed += len(targets)
-            self.progress.emit(processed, total_targets)
-
-        self.finished_ok.emit(total_ok, all_errors)
 
 
 class ScanTab(QWidget):
@@ -294,6 +61,7 @@ class ScanTab(QWidget):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(10)
 
+        # --- Кнопка сворачивания настроек ---
         self.btn_toggle = QToolButton()
         self.btn_toggle.setText("⚙️ Настройки (Свернуть)")
         self.btn_toggle.setCheckable(True)
@@ -305,11 +73,13 @@ class ScanTab(QWidget):
         self.btn_toggle.clicked.connect(self._toggle_settings)
         root.addWidget(self.btn_toggle)
 
+        # --- Контейнер настроек ---
         self.settings_widget = QWidget()
         settings = QVBoxLayout(self.settings_widget)
         settings.setContentsMargins(0, 0, 0, 0)
         settings.setSpacing(10)
 
+        # Путь
         top = QHBoxLayout()
         self.path_edit = QLineEdit()
         self.path_edit.setPlaceholderText(
@@ -322,6 +92,7 @@ class ScanTab(QWidget):
         top.addWidget(browse_btn)
         settings.addLayout(top)
 
+        # Режим и чекбоксы
         mode_row = QHBoxLayout()
         self.mode_combo = QComboBox()
         self.mode_combo.addItem("Точные дубликаты (Хеш)", "strict")
@@ -356,12 +127,14 @@ class ScanTab(QWidget):
         mode_row.addStretch()
         settings.addLayout(mode_row)
 
+        # Глобы
         self.glob_edit = QLineEdit()
         self.glob_edit.setPlaceholderText(
             "Исключить по маске (glob): *.tmp, ~$*, desktop.ini"
         )
         settings.addWidget(self.glob_edit)
 
+        # Целевой файл (для ссылок)
         self.target_file_layout = QHBoxLayout()
         self.target_file_edit = QLineEdit()
         self.target_file_edit.setPlaceholderText(
@@ -378,11 +151,12 @@ class ScanTab(QWidget):
         self.target_file_container.hide()
         settings.addWidget(self.target_file_container)
 
+        # Фильтры
         self.filter_panel = FilterPanel()
         settings.addWidget(self.filter_panel)
-
         root.addWidget(self.settings_widget)
 
+        # --- Кнопка поиска (всегда на виду) ---
         self.scan_btn = QPushButton("🔍  Найти дубликаты")
         self.scan_btn.setProperty("class", "primary")
         self.scan_btn.setMinimumHeight(44)
@@ -390,6 +164,7 @@ class ScanTab(QWidget):
         self.scan_btn.clicked.connect(self._start)
         root.addWidget(self.scan_btn)
 
+        # Статус и прогресс
         self.status = QLabel(self._status)
         self.status.setObjectName("statusLabel")
         root.addWidget(self.status)
@@ -399,16 +174,20 @@ class ScanTab(QWidget):
         self.progress.hide()
         root.addWidget(self.progress)
 
+        # Фильтр результатов
         self.res_filter = ResultFilterBar()
         self.res_filter.filters_changed.connect(self._apply_filter)
         root.addWidget(self.res_filter)
 
+        # Инструменты
         tools = QHBoxLayout()
         self.sort_btn = QPushButton("↕ Сортировать (↓)")
         self.sort_btn.clicked.connect(self._sort)
+
         self.collapse_btn = QPushButton("⯅ Свернуть все")
         self.collapse_btn.setCheckable(True)
         self.collapse_btn.toggled.connect(self._collapse)
+
         self.dry_run = QCheckBox("Симуляция (Dry-run)")
         self.dry_run.setChecked(False)
         self.dry_run.setToolTip(
@@ -426,6 +205,7 @@ class ScanTab(QWidget):
         tools.addStretch()
         root.addLayout(tools)
 
+        # Сплиттер (Список + Превью)
         split = QSplitter(Qt.Horizontal)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -443,6 +223,7 @@ class ScanTab(QWidget):
         split.setSizes([720, 320])
         root.addWidget(split, 1)
 
+        # Панель действий
         actions = QHBoxLayout()
         actions.setSpacing(8)
 
@@ -511,24 +292,6 @@ class ScanTab(QWidget):
         if path:
             self.target_file_edit.setText(path)
 
-    def dragEnterEvent(self, e):
-        if e.mimeData().hasUrls():
-            for url in e.mimeData().urls():
-                if url.isLocalFile() and Path(url.toLocalFile()).is_dir():
-                    e.acceptProposedAction()
-                    return
-        e.ignore()
-
-    def dropEvent(self, e):
-        for url in e.mimeData().urls():
-            if url.isLocalFile():
-                p = Path(url.toLocalFile())
-                if p.is_dir():
-                    self.path_edit.setText(str(p))
-                    e.acceptProposedAction()
-                    return
-        e.ignore()
-
     def _browse(self):
         d = QFileDialog.getExistingDirectory(
             self, "Выберите директорию", self.path_edit.text() or ""
@@ -561,6 +324,7 @@ class ScanTab(QWidget):
             else None
         )
 
+        # Спиннер в трее
         main_win = self.window()
         if hasattr(main_win, "start_tray_spinner"):
             main_win.start_tray_spinner()
@@ -789,12 +553,8 @@ class ScanTab(QWidget):
 
     def _diff(self, o, d):
         if o.suffix.lower() in TEXT_EXTS and d.suffix.lower() in TEXT_EXTS:
-            from gui.diff_dialog import DiffDialog
-
             DiffDialog(o, d, self).exec()
-        elif o.suffix.lower() in {".jpg", ".png", ".jpeg", ".webp"}:
-            from gui.slider_dialog import SliderDialog
-
+        elif o.suffix.lower() in IMAGE_EXTS:
             SliderDialog(str(o), str(d), self).exec()
 
     def _apply(self):
@@ -1000,3 +760,21 @@ class ScanTab(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
         self.status.setText(self._status)
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            for url in e.mimeData().urls():
+                if url.isLocalFile() and Path(url.toLocalFile()).is_dir():
+                    e.acceptProposedAction()
+                    return
+        e.ignore()
+
+    def dropEvent(self, e):
+        for url in e.mimeData().urls():
+            if url.isLocalFile():
+                p = Path(url.toLocalFile())
+                if p.is_dir():
+                    self.path_edit.setText(str(p))
+                    e.acceptProposedAction()
+                    return
+        e.ignore()

@@ -63,19 +63,19 @@ DARK = {
     "success_press": "#059669",
     "danger": "#ef4444",
     "danger_hover": "#f87171",
-    "bg": "#0f172a",  # slate-900
-    "surface": "#1e293b",  # slate-800
-    "surface_alt": "#334155",  # slate-700
+    "bg": "#0f172a",
+    "surface": "#1e293b",
+    "surface_alt": "#334155",
     "border": "#334155",
     "border_strong": "#475569",
     "text": "#f1f5f9",
     "text_muted": "#94a3b8",
     "text_disabled": "#64748b",
     "text_on_primary": "#ffffff",
-    "legend_bg": "#1e3a8a",  # blue-900
-    "legend_border": "#1e40af",  # blue-800
-    "original_bg": "#064e3b",  # emerald-900
-    "original_border": "#047857",  # emerald-700
+    "legend_bg": "#1e3a8a",
+    "legend_border": "#1e40af",
+    "original_bg": "#064e3b",
+    "original_border": "#047857",
     "tooltip_bg": "#f1f5f9",
     "tooltip_text": "#0f172a",
 }
@@ -130,7 +130,7 @@ WINDOWS_7 = {
     "legend_border": "#a3c9f0",
     "original_bg": "#ebf7eb",
     "original_border": "#b5dfb5",
-    "tooltip_bg": "#ffffe1",  # Классический желтый тултип Windows
+    "tooltip_bg": "#ffffe1",
     "tooltip_text": "#000000",
 }
 
@@ -215,7 +215,7 @@ PROTON = {
     "tooltip_text": "#ffffff",
 }
 
-# Реестр: ключ → палитра. Ключ сохраняется в QSettings.
+# ============================ Реестр тем ============================
 THEMES = {
     "light_blue": LIGHT_BLUE,
     "light_emerald": LIGHT_EMERALD,
@@ -642,6 +642,13 @@ QWidget#fileRow[state="delete"] QLabel,
 QWidget#fileRow[state="keep"] QLabel {{
     background: transparent;
     color: {c['text']};
+}}
+
+QLabel#columnHeader {{
+    color: {c['text_muted']};
+    font-size: 11px;
+    font-weight: 600;
+    background: transparent;
 }}
 
 """

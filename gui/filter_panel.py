@@ -12,19 +12,15 @@ from PySide6.QtWidgets import (
 )
 
 from core.scanner import normalize_extensions
+from utils.constants import CATEGORIES
 
 
 class FilterPanel(QGroupBox):
     """Панель настроек поиска: пресеты расширений, размеры, пустые файлы."""
 
     PRESET_GROUPS = {
-        "Все файлы": "",
-        "Изображения": ".jpg,.jpeg,.png,.gif,.bmp,.webp,.tiff,.heic",
-        "Видео": ".mp4,.mkv,.avi,.mov,.wmv,.flv,.webm",
-        "Аудио": ".mp3,.wav,.flac,.aac,.ogg,.m4a",
-        "Документы": ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.rtf,.odt",
-        "Архивы": ".zip,.rar,.7z,.tar,.gz,.bz2",
-        "Код": ".py,.js,.ts,.java,.c,.cpp,.h,.cs,.go,.rs,.rb,.php",
+        name.split(" ", 1)[-1]: ", ".join(sorted(exts))
+        for name, exts in CATEGORIES.items()
     }
 
     def __init__(self, parent=None):

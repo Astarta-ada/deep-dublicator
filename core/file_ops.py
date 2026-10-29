@@ -1,34 +1,41 @@
 """Операции с файлами: удаление, ссылки, перемещение, очистка."""
 
+import ctypes
 import logging
 import os
+import sys
 import shutil
-import psutil
 from pathlib import Path
+from send2trash import send2trash
+
+try:
+    import psutil
+
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
 
 from utils.history import log_action
 
 log = logging.getLogger(__name__)
 
 
-def remove_empty_dirs(root: Path):
-    """Рекурсивно удаляет пустые директории."""
-    for dirpath, dirnames, filenames in os.walk(root, topdown=False):
-        if not dirnames and not filenames:
-            try:
-                os.rmdir(dirpath)
-                log.info("Удалена пустая папка: %s", dirpath)
-            except OSError:
-                pass
-
-
-def is_file_open(path: Path) -> bool:
+def is_file_open(path: Path):  # -> bool:
     """Проверяет, открыт ли файл каким-либо процессом."""
+
+    if not HAS_PSUTIL:
+        return False
+
+    try:
+        target_path = path.resolve()
+    except OSError:
+        return False
+
     for proc in psutil.process_iter(["open_files"]):
         try:
             if proc.info["open_files"]:
                 for f in proc.info["open_files"]:
-                    if Path(f.path).resolve() == path.resolve():
+                    if Path(f.path).resolve() == target_path:
                         return True
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
@@ -37,16 +44,18 @@ def is_file_open(path: Path) -> bool:
 
 def delete_file(
     path: Path, use_trash: bool = False, dry_run: bool = False
-) -> None:
+):  # -> None:
     """Удаляет файл. При use_trash=True — в корзину (send2trash)."""
     if dry_run:
         log.info("[DRY-RUN] Удалить: %s", path)
         return
 
-    size = path.stat().st_size
-    if use_trash:
-        from send2trash import send2trash
+    try:
+        size = path.stat().st_size
+    except OSError:
+        size = 0
 
+    if use_trash:
         send2trash(str(path))
         log.info("В корзину: %s", path)
         log_action("delete_trash", str(path), size)
@@ -56,104 +65,100 @@ def delete_file(
         log_action("delete_hard", str(path), size)
 
 
-def replace_with_symlink(
-    original: Path, duplicate: Path, dry_run: bool = False
-) -> None:
-    """Безопасно заменяет duplicate символьной ссылкой на original."""
+def _check_symlink_rights():
+    """Проверяет права на создание симлинков (актуально для Windows)."""
+    if sys.platform == "win32":
+        try:
+            is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+        except Exception:
+            is_admin = False
+
+        if not is_admin:
+            raise PermissionError(
+                "Для создания симлинков в Windows требуются права администратора "
+                "или включенный 'Режим разработчика'."
+            )
+
+
+def _safe_create_link(
+    original: Path, duplicate: Path, link_type: str, dry_run: bool
+):  # -> None:
+    """Вспомогательный метод для безопасного создания ссылок (симлинков или хардлинков)."""
     if dry_run:
-        log.info("[DRY-RUN] Симлинк: %s -> %s", duplicate, original)
+        log.info("[DRY-RUN] %s: %s -> %s", link_type, duplicate, original)
         return
 
     if not original.exists():
         raise FileNotFoundError(f"Оригинал не найден: {original}")
 
+    target = original.resolve()
+
+    # Защита от создания ссылки на самого себя
+    if os.path.samefile(duplicate, target):
+        raise ValueError(
+            "Оригинал и дубликат указывают на один и тот же файл."
+        )
+
     size = duplicate.stat().st_size
+    tmp_name = duplicate.with_name(f"{duplicate.name}.tmp_link")
 
-    try:
-        target = original.resolve()
-        # Проверка, чтобы не создать ссылку на самого себя
-        if duplicate.resolve() == target:
-            raise ValueError(
-                "Дубликат и оригинал указывают на один и тот же файл"
-            )
-    except Exception as e:
-        log.error("Ошибка разрешения путей: %s", e)
-        raise
-
-    # 1. Создаем временный симлинк, чтобы не потерять файл при ошибке
-    tmp_name = duplicate.with_name(duplicate.name + ".tmp_symlink")
+    # Удаляем старый временный файл, если остался от предыдущих сбоев
     if tmp_name.exists() or tmp_name.is_symlink():
         tmp_name.unlink()
 
     try:
-        # В Windows для симлинков нужны права администратора или режим разработчика
-        os.symlink(target, tmp_name)
+        if link_type == "Symlink":
+            _check_symlink_rights()
+            os.symlink(target, tmp_name)
+        elif link_type == "Hardlink":
+            os.link(target, tmp_name)
+        else:
+            raise ValueError(f"Неизвестный тип ссылки: {link_type}")
     except OSError as e:
-        log.error("Не удалось создать симлинк: %s", e)
+        log.error("Не удалось создать %s: %s", link_type, e)
         raise OSError(
-            f"Ошибка симлинка (возможно, нет прав администратора): {e}"
+            f"Ошибка создания {link_type} (возможно, файлы на разных дисках): {e}"
         )
 
-    # 2. Если симлинк создан успешно, удаляем старый файл и переименовываем временный
+    # Если ссылка создана успешно, удаляем дубликат и переименовываем временный файл
     try:
         duplicate.unlink()
         tmp_name.rename(duplicate)
-        log.info("Симлинк: %s → %s", duplicate, target)
-        log_action("symlink", str(duplicate), size)
+        log.info("%s: %s → %s", link_type, duplicate, target)
+        log_action(link_type.lower(), str(duplicate), size)
     except Exception as e:
         if tmp_name.exists() or tmp_name.is_symlink():
-            tmp_name.unlink()  # Откатываем временный файл
+            tmp_name.unlink()  # Откатываем изменения
         raise OSError(f"Не удалось завершить замену: {e}")
+
+
+def replace_with_symlink(
+    original: Path, duplicate: Path, dry_run: bool = False
+):  # -> None:
+    """Заменяет duplicate символьной ссылкой на original."""
+    _safe_create_link(original, duplicate, "Symlink", dry_run)
 
 
 def replace_with_hardlink(
     original: Path, duplicate: Path, dry_run: bool = False
-) -> None:
-    """Заменяет duplicate жесткой ссылкой на original (безопасно)."""
-    if dry_run:
-        log.info("[DRY-RUN] Хардлинк: %s -> %s", duplicate, original)
-        return
-
-    if not original.exists():
-        raise FileNotFoundError(f"Оригинал не найден: {original}")
-
-    size = duplicate.stat().st_size
-    target = original.resolve()
-
-    # Создаем временный хардлинк рядом с дубликатом
-    tmp_name = duplicate.with_name(duplicate.name + ".tmp_hardlink")
-    if tmp_name.exists():
-        tmp_name.unlink()
-
-    try:
-        os.link(target, tmp_name)
-    except OSError as e:
-        log.error("Не удалось создать хардлинк: %s", e)
-        raise OSError(
-            f"Ошибка хардлинка (возможно, файлы на разных дисках или нет прав): {e}"
-        )
-
-    # Если хардлинк создан, удаляем старый дубликат и переименовываем временный
-    try:
-        duplicate.unlink()
-        tmp_name.rename(duplicate)
-        log.info("Хардлинк: %s → %s", duplicate, target)
-        log_action("hardlink", str(duplicate), size)
-    except Exception as e:
-        if tmp_name.exists():
-            tmp_name.unlink()  # Откатываем временный файл
-        raise OSError(f"Не удалось завершить замену: {e}")
+):  # -> None:
+    """Заменяет duplicate жесткой ссылкой на original."""
+    _safe_create_link(original, duplicate, "Hardlink", dry_run)
 
 
 def move_to_backup(
     backup_dir: Path, duplicate: Path, base_root: Path, dry_run: bool = False
-) -> None:
+):  # -> None:
     """Перемещает файл в папку бэкапа с сохранением структуры."""
     if dry_run:
         log.info("[DRY-RUN] В бэкап: %s", duplicate)
         return
 
-    size = duplicate.stat().st_size
+    try:
+        size = duplicate.stat().st_size
+    except OSError:
+        size = 0
+
     try:
         rel_path = duplicate.relative_to(base_root)
     except ValueError:
@@ -161,6 +166,7 @@ def move_to_backup(
 
     dest = backup_dir / rel_path
     dest.parent.mkdir(parents=True, exist_ok=True)
+
     shutil.move(str(duplicate), str(dest))
     log.info("Перемещено в бэкап: %s → %s", duplicate, dest)
     log_action("backup", str(duplicate), size)
@@ -168,10 +174,11 @@ def move_to_backup(
 
 def rename_duplicates(
     original: Path, duplicates: list[Path], dry_run: bool = False
-) -> tuple[int, list[tuple[Path, str]]]:
+):  # -> tuple[int, list[tuple[Path, str]]]:
     """Переименовывает дубликаты, добавляя _copy1, _copy2 и т.д."""
     ok = 0
     errors = []
+
     for i, dup in enumerate(duplicates, 1):
         new_name = dup.with_name(f"{dup.stem}_copy{i}{dup.suffix}")
 
@@ -191,6 +198,17 @@ def rename_duplicates(
     return ok, errors
 
 
+def remove_empty_dirs(root: Path):
+    """Рекурсивно удаляет пустые директории."""
+    for dirpath, dirnames, filenames in os.walk(root, topdown=False):
+        if not dirnames and not filenames:
+            try:
+                os.rmdir(dirpath)
+                log.info("Удалена пустая папка: %s", dirpath)
+            except OSError:
+                pass
+
+
 def apply_action_to_group(
     original: Path,
     duplicates: list[Path],
@@ -198,26 +216,24 @@ def apply_action_to_group(
     backup_dir: Path | None = None,
     base_root: Path | None = None,
     dry_run: bool = False,
-) -> tuple[int, list[tuple[Path, str]]]:
-    """Применяет действие ко всем дубликатам в группе."""
+):  # -> tuple[int, list[tuple[Path, str]]]:
+    """
+    Применяет действие ко всем дубликатам в группе.
+    Возвращает (количество_успешных, список_ошибок).
+    """
     ok = 0
     errors: list[tuple[Path, str]] = []
 
-    # Получаем абсолютные пути для проверки совпадений
-    try:
-        orig_resolved = original.resolve()
-    except Exception:
-        orig_resolved = original
-
     for dup in duplicates:
-        try:
-            dup_resolved = dup.resolve()
-        except Exception:
-            dup_resolved = dup
-
-        # ИСПРАВЛЕНИЕ: Если пути ведут к одному и тому же файлу, пропускаем
-        if dup == original or dup_resolved == orig_resolved:
+        if dup == original:
             continue
+
+        # Проверка, что дубликат не является тем же файлом, что и оригинал (через inode)
+        try:
+            if os.path.samefile(dup, original):
+                continue
+        except (OSError, FileNotFoundError):
+            pass
 
         try:
             if action == "delete":

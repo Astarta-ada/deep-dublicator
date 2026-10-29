@@ -8,33 +8,11 @@ from pathlib import Path
 from core.scanner import scan_directory, normalize_extensions
 from core.duplicate_finder import find_duplicates
 from core.reports import export_html, export_txt
+from core.session import build_session_from_groups
+from core.file_ops import apply_action_to_group
+from utils.helpers import human_size, parse_size_string
 
 log = logging.getLogger(__name__)
-
-
-def _human_size(num: int) -> str:
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if num < 1024:
-            return f"{num:.1f} {unit}"
-        num /= 1024
-    return f"{num:.1f} PB"
-
-
-def _parse_size(s: str) -> int:
-    """'1.5 GB' → байты."""
-    s = s.strip().upper()
-    mult = 1
-    for suf, m in (
-        ("KB", 1024),
-        ("MB", 1024**2),
-        ("GB", 1024**3),
-        ("TB", 1024**4),
-    ):
-        if s.endswith(suf):
-            mult = m
-            s = s[: -len(suf)]
-            break
-    return int(float(s) * mult)
 
 
 def run(argv):
@@ -43,7 +21,9 @@ def run(argv):
         description="Поиск дубликатов файлов в командной строке.",
     )
     parser.add_argument("path", help="директория для сканирования")
-    parser.add_argument("--no-recursive", action="store_true")
+    parser.add_argument(
+        "--no-recursive", action="store_true", help="не заходить в подпапки"
+    )
     parser.add_argument(
         "--min-size",
         default="1",
@@ -55,7 +35,9 @@ def run(argv):
     parser.add_argument(
         "--ext", default="", help="расширения через запятую, напр. .jpg,.png"
     )
-    parser.add_argument("--include-empty", action="store_true")
+    parser.add_argument(
+        "--include-empty", action="store_true", help="искать пустые файлы"
+    )
     parser.add_argument(
         "--min-savings", default="0", help="порог экономии, напр. 10MB"
     )
@@ -66,7 +48,7 @@ def run(argv):
     )
     parser.add_argument(
         "--apply",
-        choices=["delete", "trash", "symlink"],
+        choices=["delete", "trash", "symlink", "hardlink"],
         default=None,
         help="применить действие к дубликатам "
         "(первый файл в группе — оригинал)",
@@ -80,10 +62,11 @@ def run(argv):
         print(f"Ошибка: не директория: {root}", file=sys.stderr)
         return 2
 
-    min_size = _parse_size(args.min_size)
-    max_size = _parse_size(args.max_size) if args.max_size else None
+    min_size = parse_size_string(args.min_size)
+    max_size = parse_size_string(args.max_size) if args.max_size else None
     extensions = normalize_extensions(args.ext)
 
+    # 1. Сканирование
     print(f"Сканирую {root} …")
     files = list(
         scan_directory(
@@ -96,6 +79,7 @@ def run(argv):
     )
     print(f"Найдено {len(files)} файлов. Ищу дубликаты …")
 
+    # 2. Поиск дубликатов
     def cb(stage, done, total):
         if total:
             pct = int(100 * done / total)
@@ -111,7 +95,8 @@ def run(argv):
     )
     print()
 
-    threshold = _parse_size(args.min_savings)
+    # 3. Фильтрация по экономии
+    threshold = parse_size_string(args.min_savings)
     shown = {}
     for h, paths in result.items():
         try:
@@ -135,22 +120,23 @@ def run(argv):
 
     print(
         f"Групп: {len(shown)}. Потенциально освободится: "
-        f"{_human_size(total_wasted)}\n"
+        f"{human_size(total_wasted)}\n"
     )
 
+    # 4. Вывод в консоль
     for i, (h, paths) in enumerate(shown.items(), 1):
         try:
             size = paths[0].stat().st_size
         except OSError:
             size = 0
-        print(f"Группа #{i} ({len(paths)} файлов, {_human_size(size)})")
+        print(f"Группа #{i} ({len(paths)} файлов, {human_size(size)})")
         for j, p in enumerate(paths):
             mark = "★" if j == 0 else " "
             print(f"  {mark} {p}")
         print()
 
+    # 5. Сохранение отчета
     if args.report:
-        from core.session import build_session_from_groups
 
         session = build_session_from_groups(
             groups=shown,
@@ -169,14 +155,13 @@ def run(argv):
             export_html(session, rp)
         print(f"Отчёт сохранён: {rp}")
 
+    # 6. Применение действий (удаление/ссылки)
     if args.apply:
         if not args.yes:
             ans = input("Применить действие? (yes/no): ").strip().lower()
             if ans not in ("yes", "y"):
                 print("Отменено.")
                 return 0
-
-        from core.file_ops import apply_action_to_group
 
         ok_sum, err_sum = 0, 0
         for h, paths in shown.items():

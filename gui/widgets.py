@@ -1,4 +1,4 @@
-"""Переиспользуемые виджеты."""
+"""Переиспользуемые виджеты (группы дубликатов, категории, метки)."""
 
 from pathlib import Path
 from datetime import datetime
@@ -20,17 +20,13 @@ from PySide6.QtWidgets import (
 )
 
 from utils.config import EMPTY_FILE_HASH
-
-
-def human_size(num: int) -> str:
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if num < 1024:
-            return f"{num:.1f} {unit}"
-        num /= 1024
-    return f"{num:.1f} PB"
+from utils.constants import IMAGE_EXTS
+from utils.helpers import human_size, format_date, get_file_creation_time
 
 
 class ClickableLabel(QLabel):
+    """Метка с сигналами клика, двойного клика и контекстного меню."""
+
     clicked = Signal(Path)
     double_clicked = Signal(Path)
     context_requested = Signal(Path, QPoint)
@@ -57,6 +53,10 @@ class ClickableLabel(QLabel):
 
 
 class DuplicateGroupWidget(QGroupBox):
+    """
+    Одна группа дубликатов (сворачиваемая, с превью и контекстным меню).
+    """
+
     changed = Signal()
     file_clicked = Signal(Path)
     file_double_clicked = Signal(Path)
@@ -77,6 +77,7 @@ class DuplicateGroupWidget(QGroupBox):
         outer.setSpacing(6)
         outer.setContentsMargins(14, 18, 14, 14)
 
+        # --- Верхняя строка (кнопка сворачивания и превью) ---
         top_row = QHBoxLayout()
         self._toggle_btn = QToolButton()
         self._toggle_btn.setCheckable(True)
@@ -86,11 +87,11 @@ class DuplicateGroupWidget(QGroupBox):
         self._toggle_btn.clicked.connect(self._on_toggle)
         top_row.addWidget(self._toggle_btn, 0, Qt.AlignTop)
 
-        # Опциональный блок миниатюр
+        # Блок миниатюр (если включено в настройках и это картинки)
         if show_preview and paths:
             preview_layout = QHBoxLayout()
             for p in paths[:4]:
-                if p.suffix.lower() in {".jpg", ".png", ".jpeg", ".webp"}:
+                if p.suffix.lower() in IMAGE_EXTS:
                     pix = QPixmap(str(p))
                     if not pix.isNull():
                         lbl = QLabel()
@@ -109,11 +110,13 @@ class DuplicateGroupWidget(QGroupBox):
             top_row.addStretch()
         outer.addLayout(top_row)
 
+        # --- Сворачиваемое тело группы ---
         self._body = QWidget()
         body_layout = QVBoxLayout(self._body)
         body_layout.setContentsMargins(0, 6, 0, 0)
         body_layout.setSpacing(4)
 
+        # Группа для радиокнопок (гарантирует ровно 1 оригинал)
         self._radio_group = QButtonGroup(self)
         self._radio_group.setExclusive(True)
         self._radios, self._checks, self._rows = [], [], []
@@ -138,12 +141,8 @@ class DuplicateGroupWidget(QGroupBox):
             # Инфо о дате создания/изменения
             try:
                 st = path.stat()
-                c_time = datetime.fromtimestamp(st.st_ctime).strftime(
-                    "%Y-%m-%d"
-                )
-                m_time = datetime.fromtimestamp(st.st_mtime).strftime(
-                    "%Y-%m-%d"
-                )
+                c_time = format_date(get_file_creation_time(st))
+                m_time = format_date(st.st_mtime)
                 info = f"{path}\nСоздан: {c_time} | Изменён: {m_time}"
             except Exception:
                 info = str(path)
@@ -159,7 +158,7 @@ class DuplicateGroupWidget(QGroupBox):
             h.addWidget(label, 1)
 
             radio.toggled.connect(self._on_radio_toggled)
-            # ИСПРАВЛЕНИЕ: оборачиваем в лямбду, так как check.toggled передает bool
+            # Оборачиваем в лямбду, так как check.toggled передает bool
             check.toggled.connect(lambda _: self.changed.emit())
 
             self._radios.append(radio)
@@ -170,6 +169,7 @@ class DuplicateGroupWidget(QGroupBox):
         outer.addWidget(self._body)
         self._refresh_row_states()
 
+    # ---------- Слоты ----------
     def _on_toggle(self, c):
         self._body.setVisible(c)
         self._toggle_btn.setText("▼" if c else "▶")
@@ -191,8 +191,8 @@ class DuplicateGroupWidget(QGroupBox):
             self.changed.emit()
 
     def _refresh_row_states(self):
+        """Обновляет блокировку чекбоксов и цвета строк (QSS)."""
         orig = self._get_original_index()
-        # Обрати внимание: переменные называются r (radio), c (check), row
         for i, (r, c, row) in enumerate(
             zip(self._radios, self._checks, self._rows)
         ):
@@ -229,6 +229,7 @@ class DuplicateGroupWidget(QGroupBox):
             self._radios[0].setChecked(True)
         return 0
 
+    # ---------- Публичное API ----------
     def get_selection(self):
         return (
             self.paths[self._get_original_index()],
@@ -243,11 +244,19 @@ class DuplicateGroupWidget(QGroupBox):
         return self.paths[self._get_original_index()]
 
     def set_original_index(self, idx):
+        """Безопасно устанавливает оригинал по индексу."""
+        if not (0 <= idx < len(self._radios)):
+            return  # Защита от IndexError
         self._radios[idx].setChecked(True)
         self._refresh_row_states()
 
-    def set_selected(self, idx, c):
-        self._checks[idx].setChecked(c)
+    def set_selected(self, idx: int, checked: bool):
+        """Безопасно отмечает/снимает чекбокс (с защитой оригинала)."""
+        if not (0 <= idx < len(self._checks)):
+            return  # Защита от IndexError
+        if idx == self._get_original_index():
+            return  # Оригинал нельзя отметить для удаления
+        self._checks[idx].setChecked(checked)
 
     def selected_count(self):
         return sum(1 for c in self._checks if c.isChecked())
@@ -266,11 +275,17 @@ class DuplicateGroupWidget(QGroupBox):
 
 
 class CategoryGroupWidget(QGroupBox):
+    """Контейнер для групп дубликатов одного типа (Изображения, Видео и т.д.)."""
+
     def __init__(self, title: str, count: int, parent=None):
         super().__init__(parent)
         self.setTitle(f"{title} — {count} групп")
         self.setProperty("class", "category")
+
         self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(8, 16, 8, 8)
+        self._layout.setSpacing(8)
+        # Пружина, прижимающая группы к верху
         self._layout.addStretch()
 
     def add_group(self, w):

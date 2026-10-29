@@ -1,8 +1,8 @@
 """Сериализация результатов поиска в JSON-сессию.
 
-Сессия — структурированный «снимок» результатов сканирования:
-группы дубликатов + предлагаемый оригинал в каждой группе.
-Другой пользователь открывает файл и видит ту же картину.
+Сессия — это структурированный снимок результатов сканирования:
+группы дубликатов + выбранный оригинал в каждой группе.
+Позволяет сохранить результаты и загрузить их позже или на другом ПК.
 """
 
 import getpass
@@ -20,6 +20,8 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class FileEntry:
+    """Информация об одном файле в группе."""
+
     path: str
     size: int
     mtime: float
@@ -29,6 +31,8 @@ class FileEntry:
 
 @dataclass
 class DuplicateGroup:
+    """Группа одинаковых файлов."""
+
     hash_key: str
     size: int
     files: list[FileEntry]
@@ -37,6 +41,8 @@ class DuplicateGroup:
 
 @dataclass
 class Session:
+    """Полная сессия сканирования."""
+
     version: int = SESSION_VERSION
     created_at: str = ""
     created_by: str = ""
@@ -44,7 +50,8 @@ class Session:
     filters: dict = field(default_factory=dict)
     groups: list[DuplicateGroup] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self):  # -> dict:
+        """Преобразует сессию в словарь для JSON."""
         return {
             "version": self.version,
             "created_at": self.created_at,
@@ -63,7 +70,7 @@ class Session:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Session":
+    def from_dict(cls, data: dict):  # -> "Session":
         if data.get("version") != SESSION_VERSION:
             raise ValueError(
                 f"Несовместимая версия сессии: {data.get('version')}, "
@@ -88,20 +95,22 @@ class Session:
         )
 
 
-def save_session(session: Session, path: Path) -> None:
+def save_session(session: Session, path: Path):  # -> None:
     """Сохраняет сессию в файл (добавляет .dupsession.json при необходимости)."""
     path = Path(path)
     if not str(path).endswith(SESSION_EXT):
         path = Path(str(path) + SESSION_EXT)
+
     with open(path, "w", encoding="utf-8") as f:
         json.dump(session.to_dict(), f, ensure_ascii=False, indent=2)
     log.info("Сессия сохранена: %s (%d групп)", path, len(session.groups))
 
 
-def load_session(path: Path) -> Session:
+def load_session(path: Path):  # -> Session:
     """Загружает сессию из файла."""
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
+
     session = Session.from_dict(data)
     log.info("Сессия загружена: %s (%d групп)", path, len(session.groups))
     return session
@@ -113,15 +122,15 @@ def build_session_from_groups(
     filters: dict,
     empty_hash_keys: Optional[set[str]] = None,
     created_by: str = "",
-) -> Session:
+):  # -> Session:
     """
-    Собирает Session из результата find_duplicates().
-
+    Собирает Session из результата find_duplicates() или из виджетов интерфейса.
     Первый путь в каждом списке считается выбранным оригиналом.
     """
     empty_hash_keys = empty_hash_keys or set()
 
     entries: list[DuplicateGroup] = []
+
     for h, paths in groups.items():
         files: list[FileEntry] = []
         for i, p in enumerate(paths):
@@ -138,8 +147,10 @@ def build_session_from_groups(
                     is_empty=(st.st_size == 0),
                 )
             )
+
         if not files:
             continue
+
         entries.append(
             DuplicateGroup(
                 hash_key=h,

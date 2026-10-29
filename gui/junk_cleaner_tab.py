@@ -1,112 +1,41 @@
 import os
 import shutil
+import logging
 from pathlib import Path
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
     QPushButton,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
-    QProgressBar,
     QLineEdit,
     QFileDialog,
 )
 from gui.widgets import human_size
+from core.workers import JunkScanner
 
-
-class JunkScanner(QThread):
-    finished_ok = Signal(list)
-
-    def __init__(self, root):
-        super().__init__()
-        self.root = root
-
-    def run(self):
-        results = []
-        # 1. Temp
-
-        local = os.environ.get("LOCALAPPDATA", "")
-        roaming = os.environ.get("APPDATA", "")
-
-        # 1. Кэши браузеров и программ
-        caches = {
-            "Chrome (Cache)": os.path.join(
-                local, "Google", "Chrome", "User Data", "Default", "Cache"
-            ),
-            "Edge (Cache)": os.path.join(
-                local, "Microsoft", "Edge", "User Data", "Default", "Cache"
-            ),
-            "Firefox (Cache)": os.path.join(
-                local, "Mozilla", "Firefox", "Profiles"
-            ),  # Упрощенно
-            "Telegram (Cache)": os.path.join(
-                roaming, "Telegram Desktop", "tdata", "user_data", "cache"
-            ),
-            "Windows Temp (%TEMP%)": os.environ.get("TEMP", ""),
-        }
-
-        for name, path in caches.items():
-            if path and os.path.exists(path):
-                size = self._get_size(path)
-                if size > 0:
-                    results.append((name, path, size))
-
-        # 2. Мусор в выбранной папке (__pycache__, node_modules)
-        cache_size, node_size = 0, 0
-        cache_paths, node_paths = [], []
-
-        if self.root and os.path.isdir(self.root):
-            for dirpath, dirnames, filenames in os.walk(self.root):
-                if "__pycache__" in dirnames:
-                    p = os.path.join(dirpath, "__pycache__")
-                    cache_size += self._get_size(p)
-                    cache_paths.append(p)
-                    dirnames.remove("__pycache__")
-                if "node_modules" in dirnames:
-                    p = os.path.join(dirpath, "node_modules")
-                    node_size += self._get_size(p)
-                    node_paths.append(p)
-                    dirnames.remove("node_modules")
-
-        if cache_size > 0:
-            results.append(
-                (
-                    "Кэш Python (__pycache__)",
-                    "\n".join(cache_paths),
-                    cache_size,
-                )
-            )
-        if node_size > 0:
-            results.append(
-                ("Node.js (node_modules)", "\n".join(node_paths), node_size)
-            )
-
-        self.finished_ok.emit(results)
-
-    def _get_size(self, path):
-        total = 0
-        for root, _, files in os.walk(path):
-            for f in files:
-                try:
-                    total += os.path.getsize(os.path.join(root, f))
-                except:
-                    pass
-        return total
+log = logging.getLogger(__name__)
 
 
 class JunkCleanerTab(QWidget):
     def __init__(self):
         super().__init__()
+        self.worker = None
         self.found_junk = []
+        self.setAcceptDrops(True)
         self._build_ui()
 
     def _build_ui(self):
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 16, 16, 16)
+        lay.setSpacing(10)
 
+        # --- Верхняя панель ---
         top = QHBoxLayout()
         self.path_edit = QLineEdit()
         self.path_edit.setPlaceholderText(
@@ -115,26 +44,30 @@ class JunkCleanerTab(QWidget):
         top.addWidget(QLabel("Папка:"))
         top.addWidget(self.path_edit, 1)
 
-        btn_browse = QPushButton("Обзор...")
-        btn_browse.clicked.connect(self._browse)
-        top.addWidget(btn_browse)
+        self.btn_browse = QPushButton("Обзор...")
+        self.btn_browse.clicked.connect(self._browse)
+        top.addWidget(self.btn_browse)
 
-        btn_scan = QPushButton("🔍 Анализ мусора")
-        btn_scan.setProperty("class", "primary")
-        btn_scan.clicked.connect(self._scan)
-        top.addWidget(btn_scan)
+        self.btn_scan = QPushButton("🔍 Анализ мусора")
+        self.btn_scan.setProperty("class", "primary")
+        self.btn_scan.clicked.connect(self._scan)
+        top.addWidget(self.btn_scan)
         lay.addLayout(top)
 
+        # --- Список найденного мусора ---
         self.list_widget = QListWidget()
         lay.addWidget(self.list_widget)
 
-        self.status = QLabel("Готово")
+        self.status = QLabel("Готово к работе")
+        self.status.setObjectName("statusLabel")
         lay.addWidget(self.status)
 
-        btn_clean = QPushButton("🧹 Очистить выбранное")
-        btn_clean.setProperty("class", "danger")
-        btn_clean.clicked.connect(self._clean)
-        lay.addWidget(btn_clean)
+        # --- Кнопка очистки ---
+        self.btn_clean = QPushButton("🧹 Очистить выбранное")
+        self.btn_clean.setProperty("class", "danger")
+        self.btn_clean.setMinimumHeight(36)
+        self.btn_clean.clicked.connect(self._clean)
+        lay.addWidget(self.btn_clean)
 
     def _browse(self):
         d = QFileDialog.getExistingDirectory(
@@ -146,43 +79,86 @@ class JunkCleanerTab(QWidget):
     def _scan(self):
         p = self.path_edit.text().strip()
         if not os.path.isdir(p):
-            return QMessageBox.warning(self, "Ошибка", "Выберите папку")
+            return QMessageBox.warning(
+                self, "Ошибка", "Укажите существующую папку"
+            )
 
         self.list_widget.clear()
         self.status.setText("Анализ...")
+        self.btn_scan.setEnabled(False)
+
+        # Запускаем спиннер в трее
+        main_win = self.window()
+        if hasattr(main_win, "start_tray_spinner"):
+            main_win.start_tray_spinner()
 
         self.worker = JunkScanner(p)
         self.worker.finished_ok.connect(self._done)
         self.worker.start()
 
     def _done(self, res):
-        self.status.setText(f"Найдено категорий: {len(res)}")
+        self.btn_scan.setEnabled(True)
+
+        # Останавливаем спиннер
+        main_win = self.window()
+        if hasattr(main_win, "stop_tray_spinner"):
+            main_win.stop_tray_spinner()
+
+        self.status.setText(f"Найдено категорий мусора: {len(res)}")
         self.found_junk = res
         for name, path, size in res:
             item = QListWidgetItem(f"{name} — {human_size(size)}")
             item.setData(Qt.UserRole, (name, path))
-            item.setCheckState(Qt.Checked)
+            item.setCheckState(Qt.Checked)  # По умолчанию всё отмечено
             self.list_widget.addItem(item)
 
     def _clean(self):
+        if self.list_widget.count() == 0:
+            return
+
         if (
-            QMessageBox.question(self, "Очистка", "Удалить выбранный мусор?")
+            QMessageBox.question(
+                self,
+                "Очистка",
+                "Удалить выбранный мусор? Это действие необратимо.",
+            )
             != QMessageBox.Yes
         ):
             return
+
+        cleaned_size = 0
+        errors = []
 
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             if item.checkState() == Qt.Checked:
                 name, path = item.data(Qt.UserRole)
                 try:
-                    if name.startswith("Кэш Python"):
+                    # Считаем размер перед удалением
+                    if name.startswith("Кэш Python") or name.startswith(
+                        "Node.js"
+                    ):
                         for p in path.split("\n"):
-                            shutil.rmtree(p, ignore_errors=True)
-                    elif name.startswith("Node.js"):
-                        for p in path.split("\n"):
-                            shutil.rmtree(p, ignore_errors=True)
-                    elif name.startswith("Временные"):
+                            for root, _, files in os.walk(p):
+                                for f in files:
+                                    try:
+                                        cleaned_size += os.path.getsize(
+                                            os.path.join(root, f)
+                                        )
+                                    except:
+                                        pass
+                    elif "Temp" in name or "Cache" in name:
+                        for root, _, files in os.walk(path):
+                            for f in files:
+                                try:
+                                    cleaned_size += os.path.getsize(
+                                        os.path.join(root, f)
+                                    )
+                                except:
+                                    pass
+
+                    # Удаление
+                    if "Temp" in name:
                         for f in os.listdir(path):
                             fp = os.path.join(path, f)
                             try:
@@ -192,8 +168,46 @@ class JunkCleanerTab(QWidget):
                                     shutil.rmtree(fp)
                             except:
                                 pass
-                except Exception as e:
-                    print(f"Ошибка очистки {name}: {e}")
 
-        QMessageBox.information(self, "Готово", "Выбранный мусор удален.")
+                    elif "Cache" in name:
+                        if os.path.exists(path):
+                            shutil.rmtree(path, ignore_errors=True)
+
+                    else:
+                        for p in path.split("\n"):
+                            shutil.rmtree(p, ignore_errors=True)
+
+                except Exception as e:
+                    log.error(f"Ошибка очистки {name}: {e}")
+                    errors.append(str(e))
+
         self.list_widget.clear()
+
+        msg = f"Выбранный мусор успешно удален.\nОсвобождено места: {human_size(cleaned_size)}"
+        if errors:
+            msg += f"\n\nОшибки при удалении некоторых файлов:\n" + "\n".join(
+                errors[:5]
+            )
+
+        QMessageBox.information(self, "Готово", msg)
+        self.status.setText("Готово к работе")
+
+    # --- Drag & Drop ---
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            for url in e.mimeData().urls():
+                if url.isLocalFile() and Path(url.toLocalFile()).is_dir():
+                    e.acceptProposedAction()
+                    return
+        e.ignore()
+
+    def dropEvent(self, e):
+        for url in e.mimeData().urls():
+            if url.isLocalFile():
+                p = Path(url.toLocalFile())
+                if p.is_dir():
+                    self.path_edit.setText(str(p))
+                    self._scan()  # Автоматически запускаем анализ
+                    e.acceptProposedAction()
+                    return
+        e.ignore()
