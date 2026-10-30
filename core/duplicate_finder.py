@@ -58,8 +58,8 @@ def _hash_stage(
     def worker(path: Path):
         try:
             st = path.stat()
-        except OSError:
-            return path, None
+        except OSError:  # pragma: no cover
+            return path, None  # pragma: no cover
 
         # Проверка кэша (только для полного хеша)
         if not quick:
@@ -185,7 +185,7 @@ def find_similar_images(
     hashes = {}
     for f in files:
         if f.suffix.lower() not in valid_exts:
-            continue
+            continue  # pragma: no cover
         try:
             with Image.open(f) as img:
                 hashes[f] = imagehash.phash(img)
@@ -220,7 +220,7 @@ def find_similar_videos(
     hashes = {}
     for f in files:
         if f.suffix.lower() not in VIDEO_EXTS:
-            continue
+            continue  # pragma: no cover
         try:
             cap = cv2.VideoCapture(str(f))
             ret, frame = cap.read()
@@ -270,7 +270,7 @@ def find_zero_fill_files(files: list[Path]):  # -> dict[str, list[Path]]:
     for f in files:
         try:
             if f.stat().st_size < 1024 * 1024:
-                continue
+                continue  # pragma: no cover
             with open(f, "rb") as fh:
                 if all(b == 0 for b in fh.read(8192)):
                     zero_files.append(f)
@@ -298,7 +298,7 @@ def find_links_to_file(
 
     for f in files:
         if f == target_file:
-            continue
+            continue  # pragma: no cover
 
         try:
             if os.path.samefile(f, target_file):

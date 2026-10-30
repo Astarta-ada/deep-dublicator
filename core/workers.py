@@ -275,10 +275,6 @@ class JunkScanner(QThread):
         results = []
 
         # Получаем системные пути кэшей (работает на Windows, Linux, Mac)
-        # local = QStandardPaths.writableLocation(
-        #     QStandardPaths.GenericCacheLocation
-        # )
-        # temp = QStandardPaths.writableLocation(QStandardPaths.TempLocation)
 
         cache_dir = QStandardPaths.writableLocation(
             QStandardPaths.GenericCacheLocation

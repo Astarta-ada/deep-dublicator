@@ -9,7 +9,7 @@ from PySide6.QtCore import QStandardPaths, QCoreApplication
 # ==========================================
 
 APP_NAME = "Duplicate Finder"
-APP_VERSION = "0.6.1"
+APP_VERSION = "0.6.2"
 ORG_NAME = "Aleksander Diuzhev"
 
 # инициализируем метаданные до запроса путей QStandardPaths

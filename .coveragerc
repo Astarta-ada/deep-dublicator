@@ -1,0 +1,3 @@
+[run]
+# Указываем coverage, что нужно отслеживать потоки (ThreadPoolExecutor)
+concurrency = thread

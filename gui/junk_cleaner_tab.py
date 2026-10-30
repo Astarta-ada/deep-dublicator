@@ -135,7 +135,7 @@ class JunkCleanerTab(QWidget):
                 name, path = item.data(Qt.UserRole)
                 try:
                     # Считаем размер перед удалением
-                    if name.startswith("Кэш Python") or name.startswith(
+                    if name.startswith("Python Cache") or name.startswith(
                         "Node.js"
                     ):
                         for p in path.split("\n"):
@@ -168,6 +168,12 @@ class JunkCleanerTab(QWidget):
                                     shutil.rmtree(fp)
                             except:
                                 pass
+
+                    elif name.startswith("Python Cache") or name.startswith(
+                        "Node.js"
+                    ):
+                        for p in path.split("\n"):
+                            shutil.rmtree(p, ignore_errors=True)
 
                     elif "Cache" in name:
                         if os.path.exists(path):

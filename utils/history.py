@@ -1,5 +1,6 @@
 """Журнал операций (история действий) на базе SQLite."""
 
+import contextlib
 import logging
 import sqlite3
 from datetime import datetime
@@ -15,18 +16,18 @@ DB_PATH = APP_DATA_DIR / "history.db"
 def init_db():  # -> None:
     """Создает папку и таблицу для истории, если их еще нет."""
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS actions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                action TEXT NOT NULL,
-                path TEXT NOT NULL,
-                size INTEGER NOT NULL
-            )
-        """)
-        conn.commit()
+    with contextlib.closing(sqlite3.connect(DB_PATH)) as conn:
+        with conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS actions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    size INTEGER NOT NULL
+                )
+            """)
+            conn.commit()
 
 
 def log_action(action: str, path: str, size: int):  # -> None:
@@ -42,17 +43,18 @@ def log_action(action: str, path: str, size: int):  # -> None:
 
     try:
         # Используем контекстный менеджер (with) — он автоматически делает commit и закрывает соединение
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute(
-                "INSERT INTO actions (timestamp, action, path, size) VALUES (?, ?, ?, ?)",
-                (
-                    datetime.now().isoformat(timespec="seconds"),
-                    action,
-                    path,
-                    size,
-                ),
-            )
-            conn.commit()
+        with contextlib.closing(sqlite3.connect(DB_PATH)) as conn:
+            with conn:
+                conn.execute(
+                    "INSERT INTO actions (timestamp, action, path, size) VALUES (?, ?, ?, ?)",
+                    (
+                        datetime.now().isoformat(timespec="seconds"),
+                        action,
+                        path,
+                        size,
+                    ),
+                )
+                conn.commit()
     except sqlite3.Error as e:
         # Если база заблокирована или возникла ошибка, мы просто пишем в лог,
         # но НЕ прерываем удаление файла.
@@ -67,7 +69,7 @@ def get_history():  # -> list[tuple[str, str, str, int]]:
     init_db()
 
     try:
-        with sqlite3.connect(DB_PATH) as conn:
+        with contextlib.closing(sqlite3.connect(DB_PATH)) as conn:
             cursor = conn.execute(
                 "SELECT timestamp, action, path, size "
                 "FROM actions ORDER BY id DESC LIMIT 500"
