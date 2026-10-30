@@ -1,6 +1,7 @@
 """Фоновые потоки (воркеры) для приложения."""
 
 import os
+import sys
 import time
 import logging
 from pathlib import Path
@@ -274,16 +275,43 @@ class JunkScanner(QThread):
         results = []
 
         # Получаем системные пути кэшей (работает на Windows, Linux, Mac)
-        local = QStandardPaths.writableLocation(
+        # local = QStandardPaths.writableLocation(
+        #     QStandardPaths.GenericCacheLocation
+        # )
+        # temp = QStandardPaths.writableLocation(QStandardPaths.TempLocation)
+
+        cache_dir = QStandardPaths.writableLocation(
             QStandardPaths.GenericCacheLocation
         )
-        temp = QStandardPaths.writableLocation(QStandardPaths.TempLocation)
+        temp_dir = QStandardPaths.writableLocation(QStandardPaths.TempLocation)
+
+        # Кроссплатформенные пути к кэшам браузеров
+        if sys.platform == "win32":
+            local = os.environ.get("LOCALAPPDATA", "")
+            chrome = os.path.join(
+                local, "Google", "Chrome", "User Data", "Default", "Cache"
+            )
+            edge = os.path.join(
+                local, "Microsoft", "Edge", "User Data", "Default", "Cache"
+            )
+        elif sys.platform == "darwin":  # macOS
+            chrome = os.path.expanduser(
+                "~/Library/Caches/Google/Chrome/Default/Cache"
+            )
+            edge = os.path.expanduser(
+                "~/Library/Caches/Microsoft Edge/Default/Cache"
+            )
+        else:  # Linux
+            chrome = os.path.expanduser("~/.cache/google-chrome")
+            edge = os.path.expanduser("~/.cache/microsoft-edge")
 
         caches = {
-            "Temp Files": temp,
-            "Chrome Cache": os.path.join(local, "Google", "Chrome"),
-            "Edge Cache": os.path.join(local, "Microsoft", "Edge"),
-            "Mozilla Cache": os.path.join(local, "Mozilla", "Firefox"),
+            "Temp Files": temp_dir,
+            "Chrome Cache": chrome,
+            "Edge Cache": edge,
+            "Mozilla Cache": os.path.join(
+                cache_dir, "mozilla", "firefox"
+            ),  # Примерно для Linux/Mac
         }
 
         for name, path in caches.items():

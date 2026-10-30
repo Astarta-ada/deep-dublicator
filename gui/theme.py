@@ -242,7 +242,7 @@ def build_stylesheet(theme_key: str) -> str:
 QWidget {{
     background: {c['bg']};
     color: {c['text']};
-    font-family: "Segoe UI", "SF Pro Text", "Ubuntu", "Roboto", sans-serif;
+    font-family: "Segoe UI", "San Francisco", "Inter", "Ubuntu", "Cantarell", "Helvetica Neue", sans-serif;
     font-size: 13px;
 }}
 
