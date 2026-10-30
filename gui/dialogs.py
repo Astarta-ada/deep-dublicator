@@ -8,7 +8,6 @@ from PySide6.QtGui import QPixmap, QPainter
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QPlainTextEdit,
@@ -16,10 +15,9 @@ from PySide6.QtWidgets import (
     QWidget,
     QSlider,
     QListWidget,
-    QCheckBox,
-    QMessageBox,
 )
 
+from utils.config import APP_NAME, APP_VERSION
 from utils.history import get_history
 from gui.widgets import human_size
 
@@ -169,3 +167,47 @@ class HistoryDialog(QDialog):
         close_btn = QPushButton("Закрыть")
         close_btn.clicked.connect(self.accept)
         lay.addWidget(close_btn)
+
+
+class AboutDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("О программе")
+        self.setFixedSize(450, 350)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+
+        # Заголовок
+        title = QLabel(f"<h1>{APP_NAME}</h1>")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        # Версия
+        version = QLabel(f"Версия {APP_VERSION}")
+        version.setAlignment(Qt.AlignCenter)
+        version.setStyleSheet("color: #64748b;")
+        layout.addWidget(version)
+
+        # Описание и авторство
+        info_html = """
+        <p align='center'>Мощный кроссплатформенный инструмент для поиска дубликатов, 
+        анализа дискового пространства и очистки мусора.</p>
+        
+        <p align='center'><b>Автор:</b> Aleksandr Diuzhev</p>
+        <p align='center'><b>Лицензия:</b> MIT</p>
+        
+        <p align='center'><a href='https://github.com/Astarta-ada/deep-dublicator'>
+        Перейти в репозиторий на GitHub</a></p>
+        """
+        desc = QLabel(info_html)
+        desc.setWordWrap(True)
+        desc.setOpenExternalLinks(True)  # Чтобы ссылка открывалась в браузере
+        layout.addWidget(desc)
+
+        layout.addStretch()
+
+        # Кнопка закрытия
+        close_btn = QPushButton("Закрыть")
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn, alignment=Qt.AlignCenter)
