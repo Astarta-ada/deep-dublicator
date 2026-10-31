@@ -126,8 +126,24 @@ def test_history_dialog(qtbot, mocker):
     """Проверяет заполнение списка истории операций."""
     # Мокаем функцию, чтобы не читать реальную БД
     mock_history = [
-        ("2023-01-01T12:00:00", "delete", "C:/test/file.txt", 1024),
-        ("2023-01-02T12:00:00", "trash", "C:/test/other.txt", 2048),
+        (
+            1,
+            "2023-01-01T12:00:00",
+            "backup",
+            "C:/file.txt",
+            1024,
+            '{"backup_path": "C:/bkp"}',
+            0,
+        ),
+        (
+            2,
+            "2023-01-02T12:00:00",
+            "delete_hard",
+            "C:/other.txt",
+            2048,
+            None,
+            0,
+        ),
     ]
     mocker.patch("gui.dialogs.get_history", return_value=mock_history)
 
@@ -144,9 +160,19 @@ def test_history_dialog(qtbot, mocker):
     list_widget = dlg.findChild(QListWidget)
 
     assert list_widget.count() == 2
-    assert "DELETE" in list_widget.item(0).text()
+
     assert "1.0 KB" in list_widget.item(0).text()
-    assert "TRASH" in list_widget.item(1).text()
+    assert dlg.lst.count() == 2
+    assert "BACKUP" in dlg.lst.item(0).text()
+    assert "DELETE_HARD" in dlg.lst.item(1).text()
+
+    # При выборе backup кнопка отмены должна быть активна
+    dlg.lst.setCurrentRow(0)
+    assert dlg.btn_undo.isEnabled() is True
+
+    # При выборе delete_hard кнопка отмены НЕ активна (его нельзя отменить)
+    dlg.lst.setCurrentRow(1)
+    assert dlg.btn_undo.isEnabled() is False
 
 
 # ==========================================

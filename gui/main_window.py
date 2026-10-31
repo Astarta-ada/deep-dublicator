@@ -228,6 +228,18 @@ class MainWindow(QMainWindow):
                 self.scan_tab.restore_autosave()
 
     def closeEvent(self, event):
+
+        # Аккуратно останавливаем фоновые потоки, если они есть
+        if hasattr(self, "scan_tab"):
+            worker = getattr(self.scan_tab, "worker", None)
+            if worker and worker.isRunning():
+                worker.cancel()
+                worker.wait(2000)
+
+            apply_worker = getattr(self.scan_tab, "apply_worker", None)
+            if apply_worker and apply_worker.isRunning():
+                apply_worker.wait(2000)
+
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue(
             "hogs_table/header",

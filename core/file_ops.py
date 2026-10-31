@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import shutil
+import json
 from pathlib import Path
 from send2trash import send2trash
 
@@ -15,7 +16,7 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
-from utils.history import log_action
+from utils.history import log_action, mark_as_undone
 
 log = logging.getLogger(__name__)
 
@@ -168,6 +169,9 @@ def move_to_backup(
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     shutil.move(str(duplicate), str(dest))
+    # Сохраняем метаданные (куда переместили)
+    meta = json.dumps({"backup_path": str(dest)})
+
     log.info("Перемещено в бэкап: %s → %s", duplicate, dest)
     log_action("backup", str(duplicate), size)
 
@@ -190,12 +194,60 @@ def rename_duplicates(
         try:
             size = dup.stat().st_size
             dup.rename(new_name)
+            meta = json.dumps({"new_path": str(new_name)})
             log_action("rename", str(dup), size)
             ok += 1
         except Exception as e:
             log.exception("Ошибка переименования %s", dup)
             errors.append((dup, str(e)))
     return ok, errors
+
+
+def undo_action(
+    action_id: int, action: str, path: str, meta_str: str
+):  # -> bool:
+    """
+    Пытается отменить действие.
+    Возвращает True, если успешно, иначе False.
+    """
+    if not meta_str:
+        return False
+
+    try:
+        meta = json.loads(meta_str)
+    except json.JSONDecodeError:
+        return False
+
+    original_path = Path(path)
+
+    try:
+        if action == "backup":
+            backup_path = Path(meta.get("backup_path", ""))
+            if not backup_path.exists():
+                raise FileNotFoundError("Файл бэкапа не найден.")
+            if original_path.exists():
+                raise FileExistsError("По исходному пути уже существует файл.")
+
+            original_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(backup_path), str(original_path))
+
+        elif action == "rename":
+            new_path = Path(meta.get("new_path", ""))
+            if not new_path.exists():
+                raise FileNotFoundError("Переименованный файл не найден.")
+            if original_path.exists():
+                raise FileExistsError("По исходному пути уже существует файл.")
+
+            new_path.rename(original_path)
+        else:
+            return False
+
+        mark_as_undone(action_id)
+        return True
+
+    except Exception as e:
+        log.error("Ошибка отмены действия %s: %s", action, e)
+        raise e
 
 
 def remove_empty_dirs(root: Path):

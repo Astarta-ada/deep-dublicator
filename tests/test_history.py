@@ -54,12 +54,11 @@ def test_init_db(mock_db_path):
 
 def test_log_action_success(mock_db_path):
     """Проверяет успешную запись действия в историю."""
-    history.log_action("delete_hard", "C:/file.txt", 1024)
+    history.log_action("delete_hard", "C:/file.txt", 1024, meta='{"test": 1}')
 
-    # ИСПРАВЛЕНО: явно закрываем соединение после проверки
     conn = sqlite3.connect(mock_db_path)
     try:
-        cursor = conn.execute("SELECT action, path, size FROM actions")
+        cursor = conn.execute("SELECT action, path, size, meta FROM actions")
         row = cursor.fetchone()
     finally:
         conn.close()
@@ -68,6 +67,7 @@ def test_log_action_success(mock_db_path):
     assert row[0] == "delete_hard"
     assert row[1] == "C:/file.txt"
     assert row[2] == 1024
+    assert row[3] == '{"test": 1}'
 
 
 def test_log_action_sqlite_error(mock_db_path, mocker):
@@ -105,13 +105,14 @@ def test_get_history_success(mock_db_path):
     assert len(records) == 3
 
     # Проверяем, что последняя запись идет первой (DESC)
-    assert records[0][1] == "action3"
-    assert records[1][1] == "action2"
-    assert records[2][1] == "action1"
+    assert records[0][2] == "action3"
+    assert records[1][2] == "action2"
+    assert records[2][2] == "action1"
 
-    # Проверяем формат (timestamp, action, path, size)
-    assert len(records[0]) == 4
-    assert isinstance(records[0][0], str)  # timestamp
+    # Проверяем формат (id, timestamp, action, path, size, meta, is_undone)
+    assert len(records[0]) == 7
+    assert records[0][6] == 0  # is_undone == False
+    assert isinstance(records[0][1], str)  # timestamp
 
 
 def test_get_history_sqlite_error(mock_db_path, mocker):

@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl, QTimer
 from PySide6.QtGui import QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QWidget,
@@ -300,6 +300,12 @@ class ScanTab(QWidget):
             self.path_edit.setText(d)
 
     def _start(self):
+
+        # Если предыдущий поток еще работает - останавливаем его
+        if self.worker and self.worker.isRunning():
+            self.worker.cancel()
+            self.worker.wait()
+
         p = Path(self.path_edit.text().strip())
         if not p.is_dir():
             QMessageBox.warning(
@@ -349,14 +355,26 @@ class ScanTab(QWidget):
         self.worker.start()
 
     def _prog_bytes(self, stage, done, total, eta):
-        if total > 0:
-            self.progress.setValue(int(100 * done / total))
-            e_str = f"{int(eta//60)}м {int(eta%60)}с" if eta > 0 else "0с"
-            stage_ru = {
-                "quick_hash": "быстрый хеш",
-                "full_hash": "полный хеш",
-            }.get(stage, stage)
-            self.progress.setFormat(f"{stage_ru} | осталось: {e_str}")
+        try:
+            if total > 0:
+                pct = int(100 * done / total)
+                # Защита от выхода за пределы 0-100
+                pct = max(0, min(100, pct))
+                self.progress.setValue(pct)
+
+                # Безопасное форматирование ETA
+                if eta > 0 and eta != float("inf"):
+                    e_str = f"{int(eta//60)}м {int(eta%60)}с"
+                else:
+                    e_str = "0с"
+
+                stage_ru = {
+                    "quick_hash": "быстрый хеш",
+                    "full_hash": "полный хеш",
+                }.get(stage, stage)
+                self.progress.setFormat(f"{stage_ru} | осталось: {e_str}")
+        except (OverflowError, ValueError, ZeroDivisionError):
+            pass  # Игнорируем ошибки форматирования прогресса, чтобы не уронить программу
 
     def _on_failed(self, msg: str):
         self.progress.hide()
@@ -389,18 +407,7 @@ class ScanTab(QWidget):
         self._populate(res)
 
         # --- АВТОСОХРАНЕНИЕ ---
-        try:
-            r = {
-                w.hash_key: [w.get_original()]
-                + [x for x in w.paths if x != w.get_original()]
-                for w in self.groups
-            }
-            session = build_session_from_groups(
-                r, self.path_edit.text(), self.filter_panel.as_dict()
-            )
-            save_session(session, AUTOSAVE_FILE)
-        except Exception as e:
-            log.error("Не удалось автосохранить сессию: %s", e)
+        QTimer.singleShot(1000, self._do_autosave)
 
         # Уведомление в трей
         if hasattr(main_win, "notify"):
@@ -448,9 +455,16 @@ class ScanTab(QWidget):
                 c = get_category(paths[0].suffix)
             cats.setdefault(c, []).append((h, paths))
 
+        # Костыль 1: Отключаем перерисовку интерфейса на время создания виджетов
+        self.setUpdatesEnabled(False)
+
         show_prev = user_settings._settings().value(
             "group_preview", True, bool
         )
+        # Костыль 2: Отключаем превью, если групп слишком много (экономия памяти и CPU)
+        if len(res) > 100:
+            show_prev = False
+
         sorted_cats = sorted(cats.keys())
         if "📭 Пустые файлы" in sorted_cats:
             sorted_cats.remove("📭 Пустые файлы")
@@ -477,6 +491,10 @@ class ScanTab(QWidget):
             self.res_layout.addWidget(cw)
 
         self.res_layout.addStretch()
+
+        # Включаем перерисовку обратно
+        self.setUpdatesEnabled(True)
+
         self._apply_filter()
         self._upd_stat()
 
@@ -778,3 +796,21 @@ class ScanTab(QWidget):
                     e.acceptProposedAction()
                     return
         e.ignore()
+
+    def _do_autosave(self):
+        """Фоновое (отложенное) сохранение сессии."""
+        if not self.groups:
+            return
+        try:
+            r = {
+                w.hash_key: [w.get_original()]
+                + [x for x in w.paths if x != w.get_original()]
+                for w in self.groups
+            }
+            session = build_session_from_groups(
+                r, self.path_edit.text(), self.filter_panel.as_dict()
+            )
+            save_session(session, AUTOSAVE_FILE)
+            log.info("Автосохранение завершено.")
+        except Exception as e:
+            log.error("Не удалось автосохранить сессию: %s", e)

@@ -29,7 +29,9 @@ class ScanWorker(QThread):
     """Фоновый поток для поиска дубликатов (с поддержкой ETA)."""
 
     progress_msg = Signal(str)
-    progress_bytes = Signal(str, int, int, float)  # stage, done, total, eta
+    progress_bytes = Signal(
+        str, float, float, float
+    )  # stage, done, total, eta
     finished_ok = Signal(dict)
     failed = Signal(str)
 
@@ -59,11 +61,17 @@ class ScanWorker(QThread):
         self.globs = globs
         self.phash = phash
         self.target_file = Path(target_file) if target_file else None
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
 
     def run(self):
         try:
             self.progress_msg.emit("Сканирование директории…")
             is_links = self.mode == "links"
+            if self._is_cancelled:
+                return
 
             files = list(
                 scan_directory(
@@ -79,12 +87,20 @@ class ScanWorker(QThread):
             self.progress_msg.emit(f"Найдено {len(files)} файлов. Анализ…")
 
             start = time.time()
+            last_emit = 0
 
             def cb(stage, done, total):
+                nonlocal last_emit
                 el = time.time() - start
                 speed = done / el if el > 0 else 0
                 eta = (total - done) / speed if speed > 0 else 0
-                self.progress_bytes.emit(stage, done, total, eta)
+
+                now = time.time()
+                if now - last_emit > 0.1 or done == total:
+                    self.progress_bytes.emit(
+                        stage, float(done), float(total), eta
+                    )
+                    last_emit = now
 
             if self.mode == "strict":
                 res = find_duplicates(

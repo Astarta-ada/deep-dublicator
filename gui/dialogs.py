@@ -1,5 +1,6 @@
 """Диалоговые окна приложения."""
 
+import json
 import difflib
 import logging
 from pathlib import Path
@@ -8,6 +9,7 @@ from PySide6.QtGui import QPixmap, QPainter
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QPlainTextEdit,
@@ -15,11 +17,15 @@ from PySide6.QtWidgets import (
     QWidget,
     QSlider,
     QListWidget,
+    QCheckBox,
+    QMessageBox,
+    QListWidgetItem,
 )
 
 from utils.config import APP_NAME, APP_VERSION
 from utils.history import get_history
 from gui.widgets import human_size
+from core.file_ops import undo_action
 
 log = logging.getLogger(__name__)
 
@@ -151,22 +157,81 @@ class HistoryDialog(QDialog):
     3. История операций (Undo-лог)
     =========================================="""
 
-    def __init__(self, parent):
+    def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("История операций")
         self.resize(800, 600)
 
         lay = QVBoxLayout(self)
-        lst = QListWidget()
+        self.lst = QListWidget()
+        self.lst.currentItemChanged.connect(self._on_select)
 
-        # get_history() возвращает (timestamp, action, path, size)
-        for t, a, p, s in get_history():
-            lst.addItem(f"[{t[:16]}] {a.upper()}: {p} ({human_size(s)})")
-        lay.addWidget(lst)
+        lay.addWidget(self.lst)
 
-        close_btn = QPushButton("Закрыть")
-        close_btn.clicked.connect(self.accept)
-        lay.addWidget(close_btn)
+        btn_layout = QHBoxLayout()
+        self.btn_undo = QPushButton("⏪ Отменить действие")
+        self.btn_undo.setEnabled(False)
+        self.btn_undo.clicked.connect(self._do_undo)
+
+        btn_close = QPushButton("Закрыть")
+        btn_close.clicked.connect(self.accept)
+
+        btn_layout.addWidget(self.btn_undo)
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_close)
+        lay.addLayout(btn_layout)
+
+        self._load_history()
+
+    def _load_history(self):
+        self.lst.clear()
+        # get_history теперь возвращает (id, timestamp, action, path, size, meta, is_undone)
+        for row in get_history():
+            action_id, t, a, p, s, meta, is_undone = row
+
+            status = " ❌ [ОТМЕНЕНО]" if is_undone else ""
+            text = f"[{t[:16]}] {a.upper()}: {p} ({human_size(s)}){status}"
+
+            item = QListWidgetItem(text)
+            item.setData(Qt.UserRole, row)
+            self.lst.addItem(item)
+
+    def _on_select(self):
+        item = self.lst.currentItem()
+        if not item:
+            self.btn_undo.setEnabled(False)
+            return
+
+        data = item.data(Qt.UserRole)
+        action = data[2]
+        is_undone = data[6]
+
+        # Отменять можно только backup и rename, и если еще не отменено
+        can_undo = action in ("backup", "rename") and not is_undone
+        self.btn_undo.setEnabled(can_undo)
+
+    def _do_undo(self):
+        item = self.lst.currentItem()
+        if not item:
+            return
+
+        action_id, _, action, path, _, meta, _ = item.data(Qt.UserRole)
+
+        try:
+            success = undo_action(action_id, action, path, meta)
+            if success:
+                QMessageBox.information(
+                    self, "Успех", "Действие успешно отменено."
+                )
+                self._load_history()  # Перезагружаем список
+            else:
+                QMessageBox.warning(
+                    self, "Ошибка", "Это действие нельзя отменить."
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Ошибка", f"Не удалось отменить действие:\n{e}"
+            )
 
 
 class AboutDialog(QDialog):

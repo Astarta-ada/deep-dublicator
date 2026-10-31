@@ -165,8 +165,8 @@ def test_done_empty(scan_tab):
 
 def test_done_success(scan_tab, mocker):
     mocker.patch("gui.scan_tab.ScanTab._populate")
-    mocker.patch("gui.scan_tab.save_session")
-    mocker.patch("gui.scan_tab.build_session_from_groups")
+    # ИСПРАВЛЕНИЕ: Мокаем QTimer.singleShot, чтобы автосохранение не ждало 1 секунду
+    mock_timer = mocker.patch("PySide6.QtCore.QTimer.singleShot")
 
     res = {"h1": [Path("f1"), Path("f2")]}
     scan_tab._done(res)
@@ -175,6 +175,8 @@ def test_done_success(scan_tab, mocker):
     assert scan_tab.scan_btn.isEnabled() is True
     assert "Найдено групп: 1" in scan_tab.status.text()
     assert scan_tab.window().notify.called
+    # Проверяем, что таймер автосохранения был запущен
+    assert mock_timer.called
 
 
 def test_populate(scan_tab, mocker):
@@ -183,7 +185,8 @@ def test_populate(scan_tab, mocker):
     mocker.patch("gui.scan_tab.ScanTab._apply_filter")
     mocker.patch("gui.scan_tab.ScanTab._upd_stat")
 
-    # Мокаем addWidget, чтобы Qt не проверял тип MagicMock
+    # ИСПРАВЛЕНИЕ: Мокаем setUpdatesEnabled, чтобы проверить его вызов
+    mock_updates = mocker.patch.object(scan_tab, "setUpdatesEnabled")
     mocker.patch.object(scan_tab.res_layout, "addWidget")
 
     mocker.patch("gui.scan_tab.CategoryGroupWidget")
@@ -196,7 +199,9 @@ def test_populate(scan_tab, mocker):
 
     scan_tab._populate(res)
 
-    # Проверяем, что создались виджеты (2 группы)
+    # Проверяем, что отрисовка отключалась и включалась
+    mock_updates.assert_any_call(False)
+    mock_updates.assert_any_call(True)
     assert mock_dup_widget.call_count == 2
     assert len(scan_tab.groups) == 2
 
@@ -548,3 +553,13 @@ def test_drag_and_drop(scan_tab, mocker):
     scan_tab.dropEvent(drop_event)
     assert scan_tab.path_edit.text() == "C:\\DropFolder"
     drop_event.acceptProposedAction.assert_called_once()
+
+
+def test_do_autosave(scan_tab, mocker):
+    """Проверяет метод отложенного автосохранения."""
+    scan_tab.groups = [MagicMock()]
+    mocker.patch("gui.scan_tab.build_session_from_groups")
+    mock_save = mocker.patch("gui.scan_tab.save_session")
+
+    scan_tab._do_autosave()
+    assert mock_save.called

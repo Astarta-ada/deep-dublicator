@@ -16,6 +16,7 @@ from core.file_ops import (
     rename_duplicates,
     remove_empty_dirs,
     apply_action_to_group,
+    undo_action,
 )
 
 # ==========================================
@@ -400,3 +401,102 @@ def test_import_psutil_fail(mocker):
     # Возвращаем все как было для других тестов
     mocker.stopall()
     importlib.reload(core.file_ops)
+
+
+def test_undo_action_backup(tmp_path, mocker):
+    orig = tmp_path / "file.txt"
+    backup = tmp_path / "backup" / "file.txt"
+    backup.parent.mkdir()
+    backup.write_text("data")
+
+    meta = '{"backup_path": "' + str(backup).replace("\\", "\\\\") + '"}'
+
+    # Мокаем mark_as_undone
+    mock_mark = mocker.patch("core.file_ops.mark_as_undone")
+
+    success = undo_action(1, "backup", str(orig), meta)
+
+    assert success is True
+    assert orig.exists()
+    assert not backup.exists()
+    assert mock_mark.called
+
+
+# ==========================================
+# 9. Тесты для undo_action (Новое)
+# ==========================================
+
+
+def test_undo_action_backup_success(tmp_path, mocker):
+    """Проверяет восстановление файла из бэкапа."""
+    orig = tmp_path / "file.txt"
+    backup = tmp_path / "backup" / "file.txt"
+    backup.parent.mkdir()
+    backup.write_text("data")
+
+    meta = f'{{"backup_path": "{str(backup).replace(chr(92), chr(92)*2)}"}}'
+    mock_mark = mocker.patch("core.file_ops.mark_as_undone")
+
+    success = undo_action(1, "backup", str(orig), meta)
+
+    assert success is True
+    assert orig.exists()
+    assert not backup.exists()
+    assert mock_mark.called
+
+
+def test_undo_action_rename_success(tmp_path, mocker):
+    """Проверяет отмену переименования."""
+    orig = tmp_path / "file.txt"
+    new_path = tmp_path / "file_copy1.txt"
+    new_path.write_text("data")
+
+    meta = f'{{"new_path": "{str(new_path).replace(chr(92), chr(92)*2)}"}}'
+    mock_mark = mocker.patch("core.file_ops.mark_as_undone")
+
+    success = undo_action(1, "rename", str(orig), meta)
+
+    assert success is True
+    assert orig.exists()
+    assert not new_path.exists()
+    assert mock_mark.called
+
+
+def test_undo_action_invalid_meta(tmp_path):
+    """Проверяет некорректный JSON в метаданных."""
+    success = undo_action(1, "backup", "C:/file.txt", "not_a_json")
+    assert success is False
+
+
+def test_undo_action_missing_meta():
+    """Проверяет отсутствие метаданных (None)."""
+    success = undo_action(1, "backup", "C:/file.txt", None)
+    assert success is False
+
+
+def test_undo_action_unsupported_action():
+    """Проверяет неподдерживаемое действие (например, delete)."""
+    success = undo_action(1, "delete_hard", "C:/file.txt", "{}")
+    assert success is False
+
+
+def test_undo_action_file_missing(tmp_path):
+    """Проверяет ошибку, если файл бэкапа не найден."""
+    orig = tmp_path / "file.txt"
+    meta = '{"backup_path": "C:/ghost_backup.txt"}'
+
+    with pytest.raises(FileNotFoundError):
+        undo_action(1, "backup", str(orig), meta)
+
+
+def test_undo_action_dest_exists(tmp_path):
+    """Проверяет ошибку, если исходный файл уже существует."""
+    orig = tmp_path / "file.txt"
+    orig.write_text("existing")
+    backup = tmp_path / "backup.txt"
+    backup.write_text("data")
+
+    meta = f'{{"backup_path": "{str(backup).replace(chr(92), chr(92)*2)}"}}'
+
+    with pytest.raises(FileExistsError):
+        undo_action(1, "backup", str(orig), meta)

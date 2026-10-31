@@ -24,13 +24,29 @@ def init_db():  # -> None:
                     timestamp TEXT NOT NULL,
                     action TEXT NOT NULL,
                     path TEXT NOT NULL,
-                    size INTEGER NOT NULL
+                    size INTEGER NOT NULL,
+                    meta TEXT DEFAULT NULL,
+                    is_undone INTEGER DEFAULT 0
                 )
             """)
-            conn.commit()
+            # Миграции для старых баз (если колонок еще нет)
+            try:
+                conn.execute(
+                    "ALTER TABLE actions ADD COLUMN meta TEXT DEFAULT NULL"
+                )
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute(
+                    "ALTER TABLE actions ADD COLUMN is_undone INTEGER DEFAULT 0"
+                )
+            except sqlite3.OperationalError:
+                pass
 
 
-def log_action(action: str, path: str, size: int):  # -> None:
+def log_action(
+    action: str, path: str, size: int, meta: str = None
+):  # -> None:
     """
     Записывает действие в историю.
 
@@ -46,12 +62,13 @@ def log_action(action: str, path: str, size: int):  # -> None:
         with contextlib.closing(sqlite3.connect(DB_PATH)) as conn:
             with conn:
                 conn.execute(
-                    "INSERT INTO actions (timestamp, action, path, size) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO actions (timestamp, action, path, size, meta) VALUES (?, ?, ?, ?, ?)",
                     (
                         datetime.now().isoformat(timespec="seconds"),
                         action,
                         path,
                         size,
+                        meta,
                     ),
                 )
                 conn.commit()
@@ -71,10 +88,23 @@ def get_history():  # -> list[tuple[str, str, str, int]]:
     try:
         with contextlib.closing(sqlite3.connect(DB_PATH)) as conn:
             cursor = conn.execute(
-                "SELECT timestamp, action, path, size "
+                "SELECT id, timestamp, action, path, size, meta, is_undone "
                 "FROM actions ORDER BY id DESC LIMIT 500"
             )
             return cursor.fetchall()
     except sqlite3.Error as e:
         log.error("Не удалось прочитать историю: %s", e)
         return []
+
+
+def mark_as_undone(action_id: int):
+    """Помечает действие как отмененное."""
+    try:
+        with contextlib.closing(sqlite3.connect(DB_PATH)) as conn:
+            with conn:
+                conn.execute(
+                    "UPDATE actions SET is_undone = 1 WHERE id = ?",
+                    (action_id,),
+                )
+    except sqlite3.Error as e:
+        log.error("Не удалось обновить статус действия: %s", e)
