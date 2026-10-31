@@ -252,8 +252,9 @@ def test_category_group(qtbot, temp_files):
 
     assert "Images — 2 групп" in cat.title()
     assert cat.property("class") == "category"
+    # НОВОЕ: Проверяем сохранение имени категории
+    assert cat.category_name == "Images"
 
     dummy_widget = QWidget()
     cat.add_group(dummy_widget)
-
     assert cat._layout.count() == 2

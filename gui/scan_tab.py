@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QToolButton,
     QSlider,
+    QTabBar,
 )
 
 
@@ -197,6 +198,16 @@ class ScanTab(QWidget):
         self.vt_btn = QPushButton("🛡 VirusTotal")
         self.vt_btn.setToolTip("Проверить хеш первого файла в базе VirusTotal")
         self.vt_btn.clicked.connect(self._check_vt)
+
+        # --- Вкладки категорий ---
+        self.category_tabs = QTabBar()
+        self.category_tabs.setExpanding(False)
+        self.category_tabs.setDrawBase(False)
+        self.category_tabs.setStyleSheet(
+            "QTabBar::tab { padding: 6px 12px; margin-right: 4px; }"
+        )
+        self.category_tabs.currentChanged.connect(self._apply_category_filter)
+        root.addWidget(self.category_tabs)
 
         tools.addWidget(self.sort_btn)
         tools.addWidget(self.collapse_btn)
@@ -470,6 +481,17 @@ class ScanTab(QWidget):
             sorted_cats.remove("📭 Пустые файлы")
             sorted_cats.insert(0, "📭 Пустые файлы")
 
+        self.category_tabs.blockSignals(True)
+        while self.category_tabs.count() > 0:
+            self.category_tabs.removeTab(0)
+
+        self.category_tabs.addTab("Все")
+        for c_name in sorted_cats:
+            self.category_tabs.addTab(c_name)
+
+        self.category_tabs.setCurrentIndex(0)
+        self.category_tabs.blockSignals(False)
+
         for c_name in sorted_cats:
             cw = CategoryGroupWidget(c_name, len(cats[c_name]))
             for h, paths in cats[c_name]:
@@ -535,6 +557,27 @@ class ScanTab(QWidget):
             )
         else:
             self.status.setText(self._status)
+
+    def _apply_category_filter(self, index):
+        """Скрывает/показывает группы в зависимости от выбранной вкладки."""
+        if index < 0:
+            return
+
+        selected_cat = self.category_tabs.tabText(index)
+
+        for i in range(self.res_layout.count()):
+            item = self.res_layout.itemAt(i)
+            if item and item.widget():
+                w = item.widget()
+                # Проверяем, что это контейнер категории
+                if isinstance(w, CategoryGroupWidget):
+                    if (
+                        selected_cat == "Все"
+                        or w.category_name == selected_cat
+                    ):
+                        w.show()
+                    else:
+                        w.hide()
 
     def _apply_filter(self):
         for g in self.groups:

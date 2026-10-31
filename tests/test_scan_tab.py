@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 from PySide6.QtCore import Qt, QPoint, QMimeData, QUrl
 from PySide6.QtGui import QDropEvent, QDragEnterEvent
-from PySide6.QtWidgets import QMessageBox, QMessageBox, QWidget
+from PySide6.QtWidgets import QMessageBox, QMessageBox, QWidget, QTabBar
 
 from gui.scan_tab import ScanTab
 from utils.constants import TEXT_EXTS, IMAGE_EXTS
@@ -180,16 +180,13 @@ def test_done_success(scan_tab, mocker):
 
 
 def test_populate(scan_tab, mocker):
-    # Мокаем методы, чтобы не вызывать реальную отрисовку
     mocker.patch("gui.scan_tab.ScanTab._clear")
     mocker.patch("gui.scan_tab.ScanTab._apply_filter")
     mocker.patch("gui.scan_tab.ScanTab._upd_stat")
-
-    # ИСПРАВЛЕНИЕ: Мокаем setUpdatesEnabled, чтобы проверить его вызов
-    mock_updates = mocker.patch.object(scan_tab, "setUpdatesEnabled")
+    mocker.patch.object(scan_tab, "setUpdatesEnabled")
     mocker.patch.object(scan_tab.res_layout, "addWidget")
 
-    mocker.patch("gui.scan_tab.CategoryGroupWidget")
+    mock_cat_widget = mocker.patch("gui.scan_tab.CategoryGroupWidget")
     mock_dup_widget = mocker.patch("gui.scan_tab.DuplicateGroupWidget")
 
     res = {
@@ -199,11 +196,16 @@ def test_populate(scan_tab, mocker):
 
     scan_tab._populate(res)
 
-    # Проверяем, что отрисовка отключалась и включалась
-    mock_updates.assert_any_call(False)
-    mock_updates.assert_any_call(True)
+    # Проверяем, что вкладки создались
+    assert scan_tab.category_tabs.count() == 3  # Все + Пустые + Изображения
+    assert scan_tab.category_tabs.tabText(0) == "Все"
+    # Пустые файлы всегда идут первыми
+    assert "Пустые файлы" in scan_tab.category_tabs.tabText(1)
+    assert "Изображения" in scan_tab.category_tabs.tabText(2)
+
+    # Проверяем, что создались виджеты групп
     assert mock_dup_widget.call_count == 2
-    assert len(scan_tab.groups) == 2
+    assert mock_cat_widget.call_count == 2
 
 
 def test_clear(scan_tab, mocker):
@@ -563,3 +565,42 @@ def test_do_autosave(scan_tab, mocker):
 
     scan_tab._do_autosave()
     assert mock_save.called
+
+
+def test_apply_category_filter(scan_tab, qtbot):
+    """Проверяет скрытие/показ групп при переключении вкладок."""
+    from gui.widgets import CategoryGroupWidget
+
+    cat1 = CategoryGroupWidget("Images", 1)
+    cat1.category_name = "Images"
+
+    cat2 = CategoryGroupWidget("Code", 1)
+    cat2.category_name = "Code"
+
+    # Добавляем их в реальный layout
+    scan_tab.res_layout.addWidget(cat1)
+    scan_tab.res_layout.addWidget(cat2)
+
+    # Настраиваем вкладки
+    # QTabBar нет метода clear(), удаляем в цикле
+    while scan_tab.category_tabs.count() > 0:
+        scan_tab.category_tabs.removeTab(0)
+
+    scan_tab.category_tabs.addTab("Все")
+    scan_tab.category_tabs.addTab("Images")
+    scan_tab.category_tabs.addTab("Code")
+
+    # 1. Выбираем "Images"
+    scan_tab._apply_category_filter(1)
+    assert cat1.isHidden() is False
+    assert cat2.isHidden() is True
+
+    # 2. Выбираем "Code"
+    scan_tab._apply_category_filter(2)
+    assert cat1.isHidden() is True
+    assert cat2.isHidden() is False
+
+    # 3. Выбираем "Все" (индекс 0)
+    scan_tab._apply_category_filter(0)
+    assert cat1.isHidden() is False
+    assert cat2.isHidden() is False

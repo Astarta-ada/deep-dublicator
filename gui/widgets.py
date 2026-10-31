@@ -279,6 +279,7 @@ class CategoryGroupWidget(QGroupBox):
 
     def __init__(self, title: str, count: int, parent=None):
         super().__init__(parent)
+        self.category_name = title
         self.setTitle(f"{title} — {count} групп")
         self.setProperty("class", "category")
 
