@@ -37,7 +37,7 @@ class ScanWorker(QThread):
 
     progress_msg = Signal(str)
     progress_bytes = Signal(
-        str, float, float, float
+        str, float, float, float, str
     )  # stage, done, total, eta
     finished_ok = Signal(dict)
     failed = Signal(str)
@@ -98,7 +98,7 @@ class ScanWorker(QThread):
             start = time.time()
             last_emit = 0
 
-            def cb(stage, done, total):
+            def cb(stage, done, total, current_file=""):
                 nonlocal last_emit
                 el = time.time() - start
                 speed = done / el if el > 0 else 0
@@ -107,7 +107,7 @@ class ScanWorker(QThread):
                 now = time.time()
                 if now - last_emit > 0.1 or done == total:
                     self.progress_bytes.emit(
-                        stage, float(done), float(total), eta
+                        stage, float(done), float(total), eta, current_file
                     )
                     last_emit = now
 

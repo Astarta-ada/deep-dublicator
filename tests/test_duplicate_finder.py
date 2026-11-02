@@ -61,7 +61,7 @@ def test_find_duplicates_full_hash_cache_hit(tmp_path, mocker):
 
     calls = []
 
-    def cb(stage, done, total):
+    def cb(stage, done, total, *args):
         calls.append(stage)
 
     # Быстрый хеш должен вернуть одинаковые хеши, чтобы файлы прошли дальше
@@ -342,7 +342,7 @@ def test_on_chunk_progress_callback_trigger(tmp_path, mocker):
 
     calls = []
 
-    def cb(stage, done, total):
+    def cb(stage, done, total, *args):
         calls.append(stage)
 
     find_duplicates([f1, f2], use_cache=False, progress_cb=cb)

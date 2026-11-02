@@ -403,7 +403,7 @@ class ScanTab(QWidget):
         self.worker.failed.connect(self._on_failed)
         self.worker.start()
 
-    def _prog_bytes(self, stage, done, total, eta):
+    def _prog_bytes(self, stage, done, total, eta, current_file=""):
         try:
             if total > 0:
                 pct = max(0, min(100, int(100 * done / total)))
@@ -420,7 +420,16 @@ class ScanTab(QWidget):
                     "quick_hash": "быстрый хеш",
                     "full_hash": "полный хеш",
                 }.get(stage, stage)
-                self.progress.setFormat(f"{stage_ru} | осталось: {e_str}")
+                file_part = ""
+                if current_file:
+                    name = current_file
+                    if len(name) > 35:
+                        name = name[:32] + "…"
+                    file_part = f" | {name}"
+
+                self.progress.setFormat(
+                    f"{stage_ru}{file_part}  | осталось: {e_str}"
+                )
         except (OverflowError, ValueError, ZeroDivisionError):
             pass
 

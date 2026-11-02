@@ -131,10 +131,17 @@ def test_start_valid_path(scan_tab, mocker):
 
 
 def test_prog_bytes(scan_tab):
-    scan_tab._prog_bytes("quick_hash", 50, 100, 60)
+    scan_tab._prog_bytes("quick_hash", 50, 100, 60, "setup.exe")
     assert scan_tab.progress.value() == 50
     assert "быстрый хеш" in scan_tab.progress.format()
+    assert "setup.exe" in scan_tab.progress.format()
     assert "1м 0с" in scan_tab.progress.format()
+
+
+def test_prog_bytes_long_name(scan_tab):
+    long_name = "very_long_filename_that_exceeds_the_limit.exe"
+    scan_tab._prog_bytes("full_hash", 50, 100, 60, long_name)
+    assert "…" in scan_tab.progress.format()
 
 
 def test_on_failed(scan_tab, mocker):

@@ -33,7 +33,7 @@ from utils.constants import (
 
 log = logging.getLogger(__name__)
 
-ProgressCb = Callable[[str, int, int], None]
+ProgressCb = Callable[[str, int, int, str], None]
 
 
 # ==========================================
@@ -62,20 +62,29 @@ def _hash_stage(
         except OSError:
             return path, None
 
+        filename = path.name
+
         if not quick:
             cached = cache.get(path, st.st_size, st.st_mtime, algorithm)
             if cached:
                 with lock:
                     done_ref[0] += st.st_size
                     if progress_cb:
-                        progress_cb(stage_name, done_ref[0], total_ref[0])
+                        progress_cb(
+                            stage_name, done_ref[0], total_ref[0], filename
+                        )
                 return path, cached
 
         def on_chunk(n: int):
             with lock:
                 done_ref[0] += n
                 if progress_cb and done_ref[0] % (1 << 20) < n:
-                    progress_cb(stage_name, done_ref[0], total_ref[0])
+                    progress_cb(
+                        stage_name, done_ref[0], total_ref[0], filename
+                    )
+
+        if progress_cb:
+            progress_cb(stage_name, done_ref[0], total_ref[0], filename)
 
         h = hash_file(
             path, algorithm=algorithm, quick=quick, progress_cb=on_chunk
@@ -127,7 +136,7 @@ def find_duplicates(
         total_q = sum(f.stat().st_size for f in candidates if f.exists())
         total_ref = [total_q]
         if progress_cb:
-            progress_cb("quick_hash", 0, total_q)
+            progress_cb("quick_hash", 0, total_q, "")
         by_quick = _hash_stage(
             candidates,
             cache,
@@ -149,7 +158,7 @@ def find_duplicates(
         total_f = sum(f.stat().st_size for f in candidates if f.exists())
         total_ref[0] = total_f
         if progress_cb:
-            progress_cb("full_hash", 0, total_f)
+            progress_cb("full_hash", 0, total_f, "")
         by_full = _hash_stage(
             candidates,
             cache,
