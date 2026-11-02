@@ -20,7 +20,6 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterable, Callable, Optional
-
 from core.hasher import hash_file
 from core.hash_cache import HashCache, _NoCache
 from utils.config import EMPTY_FILE_HASH, DEFAULT_HASH_WORKERS
@@ -52,16 +51,16 @@ def _hash_stage(
     lock: threading.Lock,
     progress_cb: Optional[ProgressCb],
     stage_name: str,
-):
+):  # -> dict[str, list[Path]]:
+
     by_hash: dict[str, list[Path]] = defaultdict(list)
 
     def worker(path: Path):
         try:
             st = path.stat()
-        except OSError:  # pragma: no cover
-            return path, None  # pragma: no cover
+        except OSError:
+            return path, None
 
-        # Проверка кэша (только для полного хеша)
         if not quick:
             cached = cache.get(path, st.st_size, st.st_mtime)
             if cached:
@@ -87,6 +86,7 @@ def _hash_stage(
             path, h = fut.result()
             if h:
                 by_hash[h].append(path)
+
     return by_hash
 
 

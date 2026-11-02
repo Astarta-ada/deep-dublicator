@@ -165,7 +165,6 @@ def test_on_drive_and_browse(disk_tab, mocker):
     disk_tab.combo.setCurrentIndex(1)
     assert disk_tab.path_edit.text() == "C:\\"
 
-    # ИСПРАВЛЕНО: правильный путь для мока
     mocker.patch(
         "gui.disk_analysis_tab.QFileDialog.getExistingDirectory",
         return_value="D:\\NewPath",
@@ -191,8 +190,6 @@ def test_start_valid_path(disk_tab, mocker):
     disk_tab._start()
 
     assert disk_tab.btn_start.isEnabled() is False
-    # ИСПРАВЛЕНО: isVisible() == False, так как виджет не показан на экране.
-    # Проверяем, что он не скрыт (isHidden == False)
     assert disk_tab.progress.isHidden() is False
     assert mock_worker.called
 
@@ -230,7 +227,6 @@ def test_expand_and_fill_child(disk_tab, mocker):
     item = TreeItem(disk_tab.tree)
     item.setText(0, "folder1")
     item.setData(0, Qt.UserRole, "C:/folder1")
-    # ИСПРАВЛЕНО: добавлен импорт QTreeWidgetItem
     QTreeWidgetItem(item).setText(0, "...")
 
     mock_run_worker = mocker.patch(
@@ -279,7 +275,6 @@ def test_add_items_all_states(disk_tab):
     disk_tab._add_items(disk_tab.tree, data, 10)
     assert disk_tab.tree.topLevelItemCount() == 3
 
-    # ИСПРАВЛЕНО: Ищем элементы по имени, так как сортировка в дереве перемешала их порядок
     def get_item(name):
         for i in range(disk_tab.tree.topLevelItemCount()):
             it = disk_tab.tree.topLevelItem(i)
@@ -324,8 +319,7 @@ def test_on_treemap_click(disk_tab, mocker):
 
 
 def test_menu_and_del(disk_tab, mocker):
-    # ИСПРАВЛЕНО: делаем элемент дочерним, чтобы он удалялся из дерева,
-    # а не вызывал self._start() (как происходит с корневыми элементами)
+
     parent = TreeItem(disk_tab.tree)
     parent.setText(0, "parent")
     item = TreeItem(parent)

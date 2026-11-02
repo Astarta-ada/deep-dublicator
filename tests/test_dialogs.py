@@ -85,7 +85,6 @@ def test_image_slider(qtbot, dummy_pixmaps):
     slider = ImageSlider(pix1, pix2)
     qtbot.addWidget(slider)
 
-    # ИСПРАВЛЕНО: виджет масштабируется до 800 пикселей в ширину
     assert slider.pos == 50
     assert slider.width() == 800
 

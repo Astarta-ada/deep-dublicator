@@ -5,8 +5,14 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, QTimer
-from PySide6.QtGui import QDesktopServices, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, QUrl, QTimer, QModelIndex
+from PySide6.QtGui import (
+    QDesktopServices,
+    QKeySequence,
+    QShortcut,
+    QStandardItemModel,
+    QColor,
+)
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -16,7 +22,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QCheckBox,
     QFileDialog,
-    QScrollArea,
     QComboBox,
     QMessageBox,
     QProgressBar,
@@ -25,7 +30,10 @@ from PySide6.QtWidgets import (
     QFrame,
     QToolButton,
     QSlider,
+    QAbstractItemView,
     QTabBar,
+    QTreeView,
+    QHeaderView,
 )
 
 
@@ -35,11 +43,21 @@ from core.workers import ScanWorker, ApplyWorker
 from gui.filter_panel import FilterPanel
 from gui.preview_panel import PreviewPanel
 from gui.result_filter_bar import ResultFilterBar
-from gui.widgets import DuplicateGroupWidget, CategoryGroupWidget, human_size
+from utils.helpers import human_size
+from gui.models import DuplicateDelegate, DuplicateItem
 from gui.dialogs import DiffDialog, SliderDialog
 from utils import settings as user_settings
 from utils.config import EMPTY_FILE_HASH, DEFAULT_HASH_WORKERS, AUTOSAVE_FILE
-from utils.constants import TEXT_EXTS, IMAGE_EXTS, get_category
+from utils.constants import (
+    TEXT_EXTS,
+    IMAGE_EXTS,
+    get_category,
+    ROLE_PATH,
+    ROLE_IS_ORIGINAL,
+    ROLE_IS_CHECKED,
+    ROLE_IS_GROUP,
+    ROLE_IS_CATEGORY,
+)
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +67,7 @@ class ScanTab(QWidget):
         super().__init__(parent)
         self.worker = None
         self.apply_worker = None
-        self.groups = []
+        # self.groups = []
         self.last_result = {}
         self._status = "Готово"
         self._sort_descending = True
@@ -199,6 +217,13 @@ class ScanTab(QWidget):
         self.vt_btn.setToolTip("Проверить хеш первого файла в базе VirusTotal")
         self.vt_btn.clicked.connect(self._check_vt)
 
+        tools.addWidget(self.sort_btn)
+        tools.addWidget(self.collapse_btn)
+        tools.addWidget(self.dry_run)
+        tools.addWidget(self.vt_btn)
+        tools.addStretch()
+        root.addLayout(tools)
+
         # --- Вкладки категорий ---
         self.category_tabs = QTabBar()
         self.category_tabs.setExpanding(False)
@@ -209,26 +234,29 @@ class ScanTab(QWidget):
         self.category_tabs.currentChanged.connect(self._apply_category_filter)
         root.addWidget(self.category_tabs)
 
-        tools.addWidget(self.sort_btn)
-        tools.addWidget(self.collapse_btn)
-        tools.addWidget(self.dry_run)
-        tools.addWidget(self.vt_btn)
-        tools.addStretch()
-        root.addLayout(tools)
-
         # Сплиттер (Список + Превью)
         split = QSplitter(Qt.Horizontal)
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.res_container = QWidget()
-        self.res_layout = QVBoxLayout(self.res_container)
-        self.res_layout.setSpacing(16)
-        self.res_layout.addStretch()
-        self.scroll.setWidget(self.res_container)
-        split.addWidget(self.scroll)
 
+        self.tree = QTreeView()
+        self.tree.setAlternatingRowColors(True)
+        self.tree.setUniformRowHeights(True)
+        self.tree.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tree.clicked.connect(self._on_tree_click)
+        self.tree.setItemDelegateForColumn(0, DuplicateDelegate(self.tree))
+        self.tree.expanded.connect(self._on_category_expanded)
+
+        self.model = QStandardItemModel()
+        self.model.setHorizontalHeaderLabels(["Файл / Группа"])
+        self.tree.setModel(self.model)
+        self.tree.header().setSectionResizeMode(QHeaderView.Stretch)
+
+        split.addWidget(self.tree)
+
+        # Добавляем превью в сплиттер
         self.preview = PreviewPanel()
         split.addWidget(self.preview)
+
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 1)
         split.setSizes([720, 320])
@@ -368,16 +396,15 @@ class ScanTab(QWidget):
     def _prog_bytes(self, stage, done, total, eta):
         try:
             if total > 0:
-                pct = int(100 * done / total)
-                # Защита от выхода за пределы 0-100
-                pct = max(0, min(100, pct))
+                pct = max(0, min(100, int(100 * done / total)))
                 self.progress.setValue(pct)
 
                 # Безопасное форматирование ETA
-                if eta > 0 and eta != float("inf"):
-                    e_str = f"{int(eta//60)}м {int(eta%60)}с"
-                else:
-                    e_str = "0с"
+                e_str = (
+                    f"{int(eta//60)}м {int(eta%60)}с"
+                    if eta > 0 and eta != float("inf")
+                    else "0с"
+                )
 
                 stage_ru = {
                     "quick_hash": "быстрый хеш",
@@ -385,7 +412,7 @@ class ScanTab(QWidget):
                 }.get(stage, stage)
                 self.progress.setFormat(f"{stage_ru} | осталось: {e_str}")
         except (OverflowError, ValueError, ZeroDivisionError):
-            pass  # Игнорируем ошибки форматирования прогресса, чтобы не уронить программу
+            pass
 
     def _on_failed(self, msg: str):
         self.progress.hide()
@@ -430,11 +457,13 @@ class ScanTab(QWidget):
             return
         try:
             s = load_session(AUTOSAVE_FILE)
-            res = {}
-            for g in s.groups:
-                ex = [Path(f.path) for f in g.files if Path(f.path).exists()]
-                if len(ex) > 1:
-                    res[g.hash_key] = ex
+            res = {
+                g.hash_key: [
+                    Path(f.path) for f in g.files if Path(f.path).exists()
+                ]
+                for g in s.groups
+            }
+            res = {k: v for k, v in res.items() if len(v) > 1}
 
             if res:
                 self._status = f"Восстановлено из кэша: {len(res)} групп"
@@ -444,13 +473,10 @@ class ScanTab(QWidget):
             log.error("Не удалось восстановить сессию: %s", e)
 
     def _populate(self, res, keep_orig=False):
-        origs = (
-            {g.hash_key: g.get_original() for g in self.groups}
-            if keep_orig
-            else {}
-        )
-        self._clear()
+        self.model.clear()
+        self.model.setHorizontalHeaderLabels(["Файл / Группа"])
         self.last_result = res
+        self._raw_cats = {}
 
         cats = {}
         for h, paths in res.items():
@@ -466,97 +492,133 @@ class ScanTab(QWidget):
                 c = get_category(paths[0].suffix)
             cats.setdefault(c, []).append((h, paths))
 
-        # Костыль 1: Отключаем перерисовку интерфейса на время создания виджетов
-        self.setUpdatesEnabled(False)
-
-        show_prev = user_settings._settings().value(
-            "group_preview", True, bool
-        )
-        # Костыль 2: Отключаем превью, если групп слишком много (экономия памяти и CPU)
-        if len(res) > 100:
-            show_prev = False
-
-        sorted_cats = sorted(cats.keys())
-        if "📭 Пустые файлы" in sorted_cats:
-            sorted_cats.remove("📭 Пустые файлы")
-            sorted_cats.insert(0, "📭 Пустые файлы")
-
         self.category_tabs.blockSignals(True)
         while self.category_tabs.count() > 0:
             self.category_tabs.removeTab(0)
-
         self.category_tabs.addTab("Все")
-        for c_name in sorted_cats:
+        for c_name in sorted(cats.keys()):
             self.category_tabs.addTab(c_name)
-
         self.category_tabs.setCurrentIndex(0)
         self.category_tabs.blockSignals(False)
 
-        for c_name in sorted_cats:
-            cw = CategoryGroupWidget(c_name, len(cats[c_name]))
-            for h, paths in cats[c_name]:
-                w = DuplicateGroupWidget(h, paths, show_preview=show_prev)
-                if keep_orig and h in origs and origs[h] in paths:
-                    w.set_original_index(paths.index(origs[h]))
+        root = self.model.invisibleRootItem()
+        for c_name in sorted(cats.keys()):
+            cat_item = DuplicateItem(
+                f"{c_name} ({len(cats[c_name])} групп)", is_category=True
+            )
+            cat_item.setBackground(QColor("#e2e8f0"))
+            # Пасхалка для пагинации: сохраняем данные в категорию
+            self._raw_cats[c_name] = cats[c_name]
+            # Добавляем пустышку, чтобы появилась стрелочка раскрытия
+            cat_item.appendRow(DuplicateItem("Загрузка...", is_group=True))
+            root.appendRow(cat_item)
 
-                w.changed.connect(self._upd_stat)
-                w.file_clicked.connect(self.preview.show_file)
-                w.file_double_clicked.connect(
-                    lambda p: QDesktopServices.openUrl(
-                        QUrl.fromLocalFile(str(p))
-                    )
+    def _on_category_expanded(self, index):
+        """Ленивая загрузка групп при раскрытии категории."""
+        cat_item = self.model.itemFromIndex(index)
+        if not cat_item or not cat_item.is_category:
+            return
+
+        if cat_item.rowCount() > 1 or (
+            cat_item.rowCount() == 1
+            and cat_item.child(0).text() != "Загрузка..."
+        ):
+            return
+
+        cat_item.removeRow(0)
+
+        c_name = cat_item.text().split(" (")[0]
+        groups_data = self._raw_cats.get(c_name, [])
+
+        # Чанкинг - добавляем группы порциями, чтобы не вешать UI
+        def add_chunk(start_idx):
+            for i in range(start_idx, min(start_idx + 50, len(groups_data))):
+                h, paths = groups_data[i]
+                size_str = (
+                    human_size(paths[0].stat().st_size) if paths else "?"
                 )
-                w.compare_requested.connect(self._diff)
+                group_item = DuplicateItem(
+                    f"Группа ({len(paths)} шт) — {size_str}", is_group=True
+                )
+                for j, p in enumerate(paths):
+                    file_item = DuplicateItem(str(p), path=p)
+                    file_item.setData(j == 0, ROLE_IS_ORIGINAL)
+                    file_item.setData(j != 0, ROLE_IS_CHECKED)
+                    group_item.appendRow(file_item)
+                cat_item.appendRow(group_item)
 
-                self.groups.append(w)
-                cw.add_group(w)
-            self.res_layout.addWidget(cw)
+            if start_idx + 50 < len(groups_data):
+                QTimer.singleShot(10, lambda: add_chunk(start_idx + 50))
 
-        self.res_layout.addStretch()
-
-        # Включаем перерисовку обратно
-        self.setUpdatesEnabled(True)
-
-        self._apply_filter()
-        self._upd_stat()
+        add_chunk(0)
+        self.tree.expand(index)
+        self._update_selection_status()
 
     def _clear(self):
-        self.groups.clear()
-        while self.res_layout.count():
-            it = self.res_layout.takeAt(0)
-            if it is not None:
-                w = it.widget()
-                if w is not None:
-                    w.setParent(None)
-                    w.deleteLater()
+        self.model.clear()
+        self.model.setHorizontalHeaderLabels(["Файл / Группа"])
         self.preview.clear()
         self.last_result = {}
 
     def _sel_all(self):
-        poss, chk = 0, 0
-        for g in self.groups:
-            o = g._get_original_index()
-            for i, c in enumerate(g._checks):
-                if i != o:
-                    poss += 1
-                    chk += c.isChecked()
-        sel = chk < poss
-        for g in self.groups:
-            o = g._get_original_index()
-            for i in range(len(g.paths)):
-                if i != o:
-                    g.set_selected(i, sel)
-        self._upd_stat()
+        root = self.model.invisibleRootItem()
+        all_checked = True
+        for i in range(root.rowCount()):
+            cat = root.child(i)
+            for j in range(cat.rowCount()):
+                grp = cat.child(j)
+                for k in range(grp.rowCount()):
+                    f = grp.child(k)
+                    if not f.data(ROLE_IS_ORIGINAL) and not f.data(
+                        ROLE_IS_CHECKED
+                    ):
+                        all_checked = False
+                        break
 
-    def _upd_stat(self):
-        tot = sum(g.selected_count() for g in self.groups)
-        if self.groups:
-            self.status.setText(f"{self._status} | отмечено: {tot}")
-            self.select_all_btn.setText(
-                "☐ Снять все" if tot > 0 else "☑ Отметить все"
-            )
+        select = not all_checked
+
+        for i in range(root.rowCount()):
+            cat = root.child(i)
+            for j in range(cat.rowCount()):
+                grp = cat.child(j)
+                for k in range(grp.rowCount()):
+                    f = grp.child(k)
+                    if not f.data(ROLE_IS_ORIGINAL):
+                        f.setData(select, ROLE_IS_CHECKED)
+
+        self._update_selection_status()
+
+    def _update_selection_status(self):
+        total_checked = 0
+        total_possible = 0
+        root = self.model.invisibleRootItem()
+
+        for i in range(root.rowCount()):
+            cat_item = root.child(i)
+            for j in range(cat_item.rowCount()):
+                group_item = cat_item.child(j)
+                for k in range(group_item.rowCount()):
+                    file_item = group_item.child(k)
+                    total_possible += 1
+                    if file_item.data(ROLE_IS_CHECKED):
+                        total_checked += 1
+
+        # Вычитаем количество оригиналов из общего числа возможных
+        total_possible -= self._count_groups()
+
+        if total_checked > 0:
+            self.select_all_btn.setText("☐ Снять все")
         else:
-            self.status.setText(self._status)
+            self.select_all_btn.setText("☑ Отметить все")
+
+        self.status.setText(f"{self._status} | отмечено: {total_checked}")
+
+    def _count_groups(self):
+        count = 0
+        root = self.model.invisibleRootItem()
+        for i in range(root.rowCount()):
+            count += root.child(i).rowCount()
+        return count
 
     def _apply_category_filter(self, index):
         """Скрывает/показывает группы в зависимости от выбранной вкладки."""
@@ -564,26 +626,38 @@ class ScanTab(QWidget):
             return
 
         selected_cat = self.category_tabs.tabText(index)
+        root = self.model.invisibleRootItem()
 
-        for i in range(self.res_layout.count()):
-            item = self.res_layout.itemAt(i)
-            if item and item.widget():
-                w = item.widget()
-                # Проверяем, что это контейнер категории
-                if isinstance(w, CategoryGroupWidget):
-                    if (
-                        selected_cat == "Все"
-                        or w.category_name == selected_cat
-                    ):
-                        w.show()
-                    else:
-                        w.hide()
+        for i in range(root.rowCount()):
+            cat_item = root.child(i)
+            is_match = selected_cat == "Все" or cat_item.text().startswith(
+                selected_cat
+            )
+            self.tree.setRowHidden(i, QModelIndex(), not is_match)
 
     def _apply_filter(self):
-        for g in self.groups:
-            savings = g.savings_bytes()
-            g.setVisible(self.res_filter.matches(savings, g.paths))
-        self._upd_stat()
+        root = self.model.invisibleRootItem()
+        for i in range(root.rowCount()):
+            cat_item = root.child(i)
+            for j in range(cat_item.rowCount()):
+                grp_item = cat_item.child(j)
+
+                orig = None
+                paths = []
+                savings = 0
+                for k in range(grp_item.rowCount()):
+                    f = grp_item.child(k)
+                    paths.append(f.path)
+                    if f.data(ROLE_IS_ORIGINAL):
+                        orig = f.path
+                    elif f.data(ROLE_IS_CHECKED):
+                        try:
+                            savings += f.path.stat().st_size
+                        except:
+                            pass
+
+                matches = self.res_filter.matches(savings, paths)
+                self.tree.setRowHidden(j, cat_item.index(), not matches)
 
     def _sort(self):
         self._sort_descending = not self._sort_descending
@@ -609,8 +683,10 @@ class ScanTab(QWidget):
         self._populate(sorted_res, keep_orig=True)
 
     def _collapse(self, c):
-        for g in self.groups:
-            g.set_collapsed(c)
+        if c:
+            self.tree.collapseAll()
+        else:
+            self.tree.expandAll()
 
     def _diff(self, o, d):
         if o.suffix.lower() in TEXT_EXTS and d.suffix.lower() in TEXT_EXTS:
@@ -618,11 +694,33 @@ class ScanTab(QWidget):
         elif o.suffix.lower() in IMAGE_EXTS:
             SliderDialog(str(o), str(d), self).exec()
 
+    def _on_tree_click(self, index):
+        item = self.model.itemFromIndex(index)
+        if item and item.path:
+            self.preview.show_file(item.path)
+
     def _apply(self):
         act = self.action_combo.currentData()
         dry = self.dry_run.isChecked()
 
-        groups_to_process = [g for g in self.groups if g.selected_count() > 0]
+        groups_to_process = []
+        root = self.model.invisibleRootItem()
+
+        for i in range(root.rowCount()):
+            cat = root.child(i)
+            for j in range(cat.rowCount()):
+                grp = cat.child(j)
+                orig = None
+                targets = []
+                for k in range(grp.rowCount()):
+                    f = grp.child(k)
+                    if f.data(ROLE_IS_ORIGINAL):
+                        orig = f.path
+                    elif f.data(ROLE_IS_CHECKED):
+                        targets.append(f.path)
+                if orig and targets:
+                    groups_to_process.append((orig, targets))
+
         if not groups_to_process:
             QMessageBox.information(
                 self, "Ничего не выбрано", "Отметьте файлы для обработки."
@@ -642,7 +740,7 @@ class ScanTab(QWidget):
             confirm = QMessageBox.question(
                 self,
                 "Подтверждение",
-                f"Вы уверены, что хотите обработать {sum(g.selected_count() for g in groups_to_process)} файлов?\n"
+                f"Вы уверены, что хотите обработать {sum(len(t) for _, t in groups_to_process)} файлов?\n"
                 f"Действие: {self.action_combo.currentText()}",
             )
             if confirm != QMessageBox.Yes:
@@ -659,8 +757,22 @@ class ScanTab(QWidget):
         if hasattr(main_win, "start_tray_spinner"):
             main_win.start_tray_spinner()
 
+        # Адаптер для ApplyWorker
+        class DummyGroup:
+            def __init__(self, orig, targets):
+                self._orig = orig
+                self._targets = targets
+
+            def selected_count(self):
+                return len(self._targets)
+
+            def get_selection(self):
+                return self._orig, self._targets
+
+        adapted_groups = [DummyGroup(o, t) for o, t in groups_to_process]
+
         self.apply_worker = ApplyWorker(
-            groups_to_process, act, bkp, Path(self.path_edit.text()), dry
+            adapted_groups, act, bkp, Path(self.path_edit.text()), dry
         )
         self.apply_worker.progress.connect(
             lambda cur, tot: self.progress.setValue(int(100 * cur / tot))
@@ -680,7 +792,7 @@ class ScanTab(QWidget):
         if not self.dry_run:
             self._populate(self.last_result, keep_orig=True)
 
-        self._upd_stat()
+        self._update_selection_status()
         msg = f"Успешно обработано: {total_ok}"
         if errors:
             msg += f"\nОшибок: {len(errors)}"
@@ -688,24 +800,36 @@ class ScanTab(QWidget):
                 msg += f"\n  {p}: {e}"
         QMessageBox.information(self, "Готово", msg)
 
+    def _get_sess(self):
+        result = {}
+        root = self.model.invisibleRootItem()
+        for i in range(root.rowCount()):
+            cat = root.child(i)
+            for j in range(cat.rowCount()):
+                grp = cat.child(j)
+                orig = None
+                paths = []
+                for k in range(grp.rowCount()):
+                    f = grp.child(k)
+                    paths.append(f.path)
+                    if f.data(ROLE_IS_ORIGINAL):
+                        orig = f.path
+                if orig and len(paths) > 1:
+                    result[str(orig)] = [orig] + [
+                        p for p in paths if p != orig
+                    ]
+        return build_session_from_groups(
+            result, self.path_edit.text(), self.filter_panel.as_dict()
+        )
+
     def _save_sess(self):
-        if not self.groups:
+        if not self.model.rowCount():
             return
         p, _ = QFileDialog.getSaveFileName(
             self, "Сессия", "session.dupsession.json", "*.json"
         )
         if p:
-            r = {
-                w.hash_key: [w.get_original()]
-                + [x for x in w.paths if x != w.get_original()]
-                for w in self.groups
-            }
-            save_session(
-                build_session_from_groups(
-                    r, self.path_edit.text(), self.filter_panel.as_dict()
-                ),
-                Path(p),
-            )
+            save_session(self._get_sess(), Path(p))
 
     def _load_sess(self):
         p, _ = QFileDialog.getOpenFileName(self, "Сессия", "", "*.json")
@@ -724,28 +848,27 @@ class ScanTab(QWidget):
             with open(p, "w", newline="", encoding="utf-8") as f:
                 w = csv.writer(f, delimiter=";")
                 w.writerow(["Группа", "Файл", "Размер", "Дата"])
-                for g in self.groups:
-                    for path in g.paths:
-                        w.writerow(
-                            [
-                                g.hash_key[:8],
-                                str(path),
-                                path.stat().st_size,
-                                datetime.fromtimestamp(
-                                    path.stat().st_ctime
-                                ).strftime("%Y-%m-%d"),
-                            ]
-                        )
-
-    def _get_sess(self):
-        r = {
-            w.hash_key: [w.get_original()]
-            + [x for x in w.paths if x != w.get_original()]
-            for w in self.groups
-        }
-        return build_session_from_groups(
-            r, self.path_edit.text(), self.filter_panel.as_dict()
-        )
+                root = self.model.invisibleRootItem()
+                for i in range(root.rowCount()):
+                    cat = root.child(i)
+                    for j in range(cat.rowCount()):
+                        grp = cat.child(j)
+                        for k in range(grp.rowCount()):
+                            path = grp.child(k).path
+                            try:
+                                st = path.stat()
+                                w.writerow(
+                                    [
+                                        j,
+                                        str(path),
+                                        st.st_size,
+                                        datetime.fromtimestamp(
+                                            st.st_ctime
+                                        ).strftime("%Y-%m-%d"),
+                                    ]
+                                )
+                            except:
+                                pass
 
     def _exp_html(self):
         p, _ = QFileDialog.getSaveFileName(
@@ -768,9 +891,15 @@ class ScanTab(QWidget):
         if p:
             with open(p, "w", encoding="utf-8") as f:
                 f.write("@echo off\n")
-                for g in self.groups:
-                    for t in g.get_selection()[1]:
-                        f.write(f'del "{t}"\n')
+                root = self.model.invisibleRootItem()
+                for i in range(root.rowCount()):
+                    cat = root.child(i)
+                    for j in range(cat.rowCount()):
+                        grp = cat.child(j)
+                        for k in range(grp.rowCount()):
+                            f_item = grp.child(k)
+                            if f_item.data(ROLE_IS_CHECKED):
+                                f.write(f'del "{f_item.path}"\n')
 
     def _check_vt(self):
         import requests
@@ -790,11 +919,11 @@ class ScanTab(QWidget):
             else:
                 return
 
-        if not self.groups:
+        if self.model.rowCount() == 0:
             return
-        target = self.groups[0].paths[0]
+        first_file = self.model.item(0, 0).child(0).child(0).path
 
-        h = hash_file(target)
+        h = hash_file(first_file)
         if not h:
             return
 
@@ -806,7 +935,7 @@ class ScanTab(QWidget):
             )
             if r.status_code == 200:
                 stats = r.json()["data"]["attributes"]["last_analysis_stats"]
-                msg = f"Файл: {target.name}\nБезопасно: {stats['harmless']}\nВредоносно: {stats['malicious']}\nПодозрительно: {stats['suspicious']}"
+                msg = f"Файл: {first_file.name}\nБезопасно: {stats['harmless']}\nВредоносно: {stats['malicious']}\nПодозрительно: {stats['suspicious']}"
                 QMessageBox.information(self, "VirusTotal", msg)
             elif r.status_code == 404:
                 QMessageBox.information(
@@ -821,6 +950,16 @@ class ScanTab(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
         self.status.setText(self._status)
+
+    def _do_autosave(self):
+        """Фоновое (отложенное) сохранение сессии."""
+        if self.model.rowCount() == 0:
+            return
+        try:
+            save_session(self._get_sess(), AUTOSAVE_FILE)
+            log.info("Автосохранение завершено.")
+        except Exception as e:
+            log.error("Не удалось автосохранить сессию: %s", e)
 
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():
@@ -839,21 +978,3 @@ class ScanTab(QWidget):
                     e.acceptProposedAction()
                     return
         e.ignore()
-
-    def _do_autosave(self):
-        """Фоновое (отложенное) сохранение сессии."""
-        if not self.groups:
-            return
-        try:
-            r = {
-                w.hash_key: [w.get_original()]
-                + [x for x in w.paths if x != w.get_original()]
-                for w in self.groups
-            }
-            session = build_session_from_groups(
-                r, self.path_edit.text(), self.filter_panel.as_dict()
-            )
-            save_session(session, AUTOSAVE_FILE)
-            log.info("Автосохранение завершено.")
-        except Exception as e:
-            log.error("Не удалось автосохранить сессию: %s", e)

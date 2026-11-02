@@ -12,6 +12,7 @@ from core.workers import (
     FolderScannerWorker,
     HogsScanner,
     JunkScanner,
+    HashTask,
 )
 
 # ==========================================
@@ -425,3 +426,14 @@ def test_hogs_scanner_age_filter_skip(mocker, tmp_path):
     # Результат должен быть пустым, так как файл слишком новый
     args = worker.finished_ok.emit.call_args[0][0]
     assert len(args) == 0
+
+
+def test_hash_task(mocker):
+    """Проверяет выполнение задачи хеширования в пуле."""
+    mock_callback = mocker.MagicMock()
+    mocker.patch("core.workers.hash_file", return_value="fake_hash")
+
+    task = HashTask(Path("test.txt"), quick=False, callback=mock_callback)
+    task.run()  # Запускаем синхронно
+
+    mock_callback.assert_called_once_with(Path("test.txt"), "fake_hash")

@@ -32,7 +32,6 @@ def test_init_db(mock_db_path):
 
     assert mock_db_path.exists()
 
-    # ИСПРАВЛЕНО: явно закрываем соединение после проверки
     conn = sqlite3.connect(mock_db_path)
     try:
         cursor = conn.execute("PRAGMA table_info(actions)")
@@ -72,7 +71,7 @@ def test_log_action_success(mock_db_path):
 
 def test_log_action_sqlite_error(mock_db_path, mocker):
     """Проверяет обработку ошибки БД при записи (база заблокирована)."""
-    # ИСПРАВЛЕНО: Мокаем init_db, чтобы ошибка возникла именно в блоке try
+
     mocker.patch("utils.history.init_db")
 
     # Имитируем ошибку при подключении к БД
@@ -117,7 +116,7 @@ def test_get_history_success(mock_db_path):
 
 def test_get_history_sqlite_error(mock_db_path, mocker):
     """Проверяет обработку ошибки БД при чтении."""
-    # ИСПРАВЛЕНО: Мокаем init_db
+
     mocker.patch("utils.history.init_db")
 
     mocker.patch("sqlite3.connect", side_effect=sqlite3.Error("Read error"))

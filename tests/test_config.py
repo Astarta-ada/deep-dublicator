@@ -24,7 +24,6 @@ def test_constants_values():
     )
 
     assert APP_NAME == "Duplicate Finder"
-    # ИСПРАВЛЕНО: Твое новое значение
     assert ORG_NAME == "Aleksander Diuzhev"
     assert QUICK_HASH_BYTES == 65536
     assert CHUNK_SIZE == 65536
@@ -51,8 +50,6 @@ def test_default_exclude_dirs():
 @pytest.fixture
 def reload_config(mocker, tmp_path):
     """Перезагружает config с замоканными путями."""
-    # ИСПРАВЛЕНО: Мокаем метод writableLocation у реального класса в PySide6,
-    # чтобы при перезагрузке модуля мок не затирался
     mocker.patch(
         "PySide6.QtCore.QStandardPaths.writableLocation",
         return_value=str(tmp_path),

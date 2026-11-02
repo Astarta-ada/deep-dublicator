@@ -92,6 +92,7 @@ def test_show_file_text(preview_panel, tmp_path):
     f.write_text("Line 1\nLine 2\n", encoding="utf-8")
 
     preview_panel.show_file(f)
+    preview_panel._execute_preview()
 
     assert preview_panel.name_label.text() == "test.txt"
     assert preview_panel.open_btn.isEnabled() is True
@@ -104,6 +105,8 @@ def test_show_text_truncated(preview_panel, tmp_path):
     f.write_text("Line\n" * 300, encoding="utf-8")
 
     preview_panel.show_file(f)
+    preview_panel._execute_preview()
+
     assert (
         "… показаны первые 200 строк" in preview_panel._text_view.toPlainText()
     )
@@ -117,6 +120,8 @@ def test_show_text_error(preview_panel, mocker):
     mocker.patch("builtins.open", side_effect=OSError("Read error"))
 
     preview_panel.show_file(f)
+    preview_panel._execute_preview()
+
     assert "Ошибка чтения: Read error" in preview_panel._hint_label.text()
 
 
@@ -125,6 +130,8 @@ def test_show_file_unsupported(preview_panel, tmp_path):
     f.write_text("data")
 
     preview_panel.show_file(f)
+    preview_panel._execute_preview()
+
     assert (
         "Предпросмотр для расширения '.xyz' недоступен"
         in preview_panel._hint_label.text()
@@ -142,6 +149,8 @@ def test_show_image_success(preview_panel, tmp_path):
     img.save(f)
 
     preview_panel.show_file(f)
+    preview_panel._execute_preview()
+
     assert preview_panel._image_label.isHidden() is False
     assert preview_panel._current_pil is not None
 
@@ -342,3 +351,41 @@ def test_missing_dependencies(mocker):
     # Возвращаем все обратно для других тестов
     mocker.stopall()
     importlib.reload(gui.preview_panel)
+
+
+def test_show_file_debounce(preview_panel, mocker, tmp_path):
+    """Проверяет, что show_file запускает таймер, а не грузит картинку сразу."""
+    f = tmp_path / "img.jpg"
+    f.touch()
+
+    mock_execute = mocker.patch.object(preview_panel, "_execute_preview")
+
+    preview_panel.show_file(f)
+
+    # Картинка еще не должна загрузиться
+    assert not mock_execute.called
+    assert preview_panel._debounce_timer.isActive()
+    assert "Загрузка превью" in preview_panel._hint_label.text()
+
+
+def test_execute_preview_image(preview_panel, mocker, tmp_path):
+    """Проверяет, что _execute_preview вызывает нужный метод для картинки."""
+    f = tmp_path / "img.jpg"
+    f.write_text("fake")
+    preview_panel._pending_path = f
+
+    mock_show = mocker.patch.object(preview_panel, "_show_image")
+
+    preview_panel._execute_preview()
+    mock_show.assert_called_once_with(f, kind="base")
+
+
+def test_execute_preview_text(preview_panel, mocker, tmp_path):
+    f = tmp_path / "test.txt"
+    f.write_text("text")
+    preview_panel._pending_path = f
+
+    mock_show = mocker.patch.object(preview_panel, "_show_text")
+
+    preview_panel._execute_preview()
+    mock_show.assert_called_once_with(f)

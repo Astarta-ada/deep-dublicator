@@ -6,7 +6,13 @@ import time
 import logging
 from pathlib import Path
 from datetime import datetime
-from PySide6.QtCore import QThread, Signal, QStandardPaths
+from PySide6.QtCore import (
+    QThread,
+    Signal,
+    QStandardPaths,
+    QRunnable,
+    QThreadPool,
+)
 
 from core.scanner import scan_directory
 from core.duplicate_finder import (
@@ -21,6 +27,7 @@ from core.duplicate_finder import (
 from core.file_ops import apply_action_to_group, rename_duplicates
 from utils.config import DEFAULT_HASH_WORKERS
 from utils.helpers import get_dir_stats, format_date
+from core.hasher import hash_file
 
 log = logging.getLogger(__name__)
 
@@ -360,3 +367,17 @@ class JunkScanner(QThread):
             results.append(("Node.js", "\n".join(node_paths), node_size))
 
         self.finished_ok.emit(results)
+
+
+class HashTask(QRunnable):
+    """Задача для вычисления хеша одного файла в пуле потоков."""
+
+    def __init__(self, path: Path, quick: bool, callback):
+        super().__init__()
+        self.path = path
+        self.quick = quick
+        self.callback = callback
+
+    def run(self):
+        h = hash_file(self.path, quick=self.quick)
+        self.callback(self.path, h)

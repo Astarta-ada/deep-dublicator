@@ -135,7 +135,6 @@ def test_duplicate_group_toggle(qtbot, temp_files):
     group = DuplicateGroupWidget("hash123", temp_files)
     qtbot.addWidget(group)
 
-    # ИСПРАВЛЕНО: используем isHidden вместо isVisible
     assert group._body.isHidden() is False
     assert group._toggle_btn.text() == "▼"
 
@@ -157,9 +156,6 @@ def test_duplicate_group_change_original(qtbot, temp_files):
     assert group._radios[1].isChecked() is True
     assert group._checks[1].isEnabled() is False
     assert group._checks[0].isEnabled() is True
-
-    # ИСПРАВЛЕНО: Первая строка больше не оригинал. Так как её чекбокс
-    # изначально был снят, она переходит в состояние "keep", а не "delete".
     assert group._rows[0].property("state") == "keep"
     assert group._rows[1].property("state") == "original"
 
@@ -207,8 +203,6 @@ def test_duplicate_group_context_menu(qtbot, mocker, temp_files):
     group = DuplicateGroupWidget("hash123", temp_files)
     qtbot.addWidget(group)
 
-    # ИСПРАВЛЕНО: Сигналы Qt нельзя мокать через patch.object.
-    # Вместо этого мы подключаем мок как слот.
     mock_sys = mocker.MagicMock()
     group.open_in_system_requested.connect(mock_sys)
 
@@ -224,8 +218,6 @@ def test_duplicate_group_context_menu(qtbot, mocker, temp_files):
 
 def test_duplicate_group_preview(qtbot, mocker, temp_files):
     """Покрывает блок создания миниатюр."""
-    # ИСПРАВЛЕНО: Возвращаем реальный QPixmap, чтобы setPixmap не падал.
-    # QPixmap нужно создавать до того, как QApplication будет создан.
     mocker.patch("gui.widgets.IMAGE_EXTS", {".txt"})
 
     # Создаем реальный объект QPixmap (64x64), который вернет QPixmap()

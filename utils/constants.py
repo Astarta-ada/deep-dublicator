@@ -1,5 +1,7 @@
 """Глобальные константы приложения."""
 
+from PySide6.QtCore import Qt
+
 # ==========================================
 # Группы расширений файлов
 # ==========================================
@@ -129,3 +131,11 @@ def get_category(ext: str) -> str:
         if ext in exts:
             return cat
     return "📦 Другие файлы"
+
+
+# Роли для QStandardItemModel (Model/View)
+ROLE_PATH = Qt.UserRole + 1
+ROLE_IS_ORIGINAL = Qt.UserRole + 2
+ROLE_IS_CHECKED = Qt.UserRole + 3
+ROLE_IS_GROUP = Qt.UserRole + 4
+ROLE_IS_CATEGORY = Qt.UserRole + 5

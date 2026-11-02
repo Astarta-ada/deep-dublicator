@@ -14,7 +14,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl, QTimer
 from PySide6.QtGui import QDesktopServices, QPixmap, QImage
 from PySide6.QtWidgets import (
     QWidget,
@@ -107,6 +107,11 @@ class PreviewPanel(QWidget):
         self._current_path: Path | None = None
         self._current_pixmap: QPixmap | None = None  # для масштабирования
         self._current_pil = None
+        self._debounce_timer = QTimer()
+        self._debounce_timer.setSingleShot(True)
+        self._debounce_timer.setInterval(250)  # 250 мс
+        self._debounce_timer.timeout.connect(self._execute_preview)
+        self._pending_path = None
         self._build_ui()
         self.clear()
 
@@ -191,19 +196,19 @@ class PreviewPanel(QWidget):
         self._hint_label.show()
 
     def show_file(self, path: Path):
+        """Вызывается при клике на файл. Грузит метаданные мгновенно, рендер откладывает."""
         self._current_path = path
+        self._pending_path = path
         self._current_pixmap = None
         self._current_pil = None
         self._image_label.clear()
         self._image_label.hide()
         self._text_view.clear()
         self._text_view.hide()
-        self._hint_label.hide()
 
         try:
             st = path.stat()
         except OSError as e:
-            log.warning("Не могу прочитать %s: %s", path, e)
             self.name_label.setText(path.name)
             self.meta_label.setText(
                 f"<span style='color:#ef4444;'>Файл недоступен: {e}</span>"
@@ -220,8 +225,22 @@ class PreviewPanel(QWidget):
         )
         self.open_btn.setEnabled(True)
 
+        # Показываем заглушку
+        self._hint_label.setText("Загрузка превью...")
+        self._hint_label.show()
+
+        # Запускаем таймер отложенного рендера (250 мс)
+        self._debounce_timer.start()
+
+    def _execute_preview(self):
+        """Выполняется только когда пользователь перестал быстро кликать."""
+        if not self._pending_path:
+            return
+
+        path = self._pending_path
         ext = path.suffix.lower()
 
+        # Здесь уже вызываем тяжелые методы рендера
         if ext in HEIC_EXTS:
             self._show_image(path, kind="heic")
         elif ext in RAW_EXTS:

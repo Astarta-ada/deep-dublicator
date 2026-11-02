@@ -1,6 +1,7 @@
 """Тесты для констант и категорий (utils/constants.py)."""
 
 import pytest
+from PySide6.QtCore import Qt
 
 from utils.constants import (
     IMAGE_EXTS,
@@ -14,6 +15,11 @@ from utils.constants import (
     CODE_EXTS,
     CATEGORIES,
     get_category,
+    ROLE_PATH,
+    ROLE_IS_ORIGINAL,
+    ROLE_IS_CHECKED,
+    ROLE_IS_GROUP,
+    ROLE_IS_CATEGORY,
 )
 
 # ==========================================
@@ -143,3 +149,26 @@ def test_get_category_case_insensitive():
     assert get_category(".Png") == "🖼 Изображения"
     assert get_category(".MP4") == "🎬 Видео"
     assert get_category(".Py") == "💻 Код и скрипты"
+
+
+# ==========================================
+# 4. Тесты для ролей Model/View (Новое)
+# ==========================================
+
+
+def test_model_roles():
+    """Проверяет, что кастомные роли уникальны и не пересекаются с базовыми."""
+    roles = [
+        ROLE_PATH,
+        ROLE_IS_ORIGINAL,
+        ROLE_IS_CHECKED,
+        ROLE_IS_GROUP,
+        ROLE_IS_CATEGORY,
+    ]
+
+    # Проверяем, что они больше Qt.UserRole
+    for role in roles:
+        assert role > Qt.UserRole
+
+    # Проверяем, что они не дублируются
+    assert len(set(roles)) == len(roles)

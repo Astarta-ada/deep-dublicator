@@ -114,7 +114,6 @@ def test_done_fills_table(hogs_tab, mocker):
     assert hogs_tab.status.text() == "Найдено файлов: 2"
     assert hogs_tab.table.rowCount() == 2
 
-    # ИСПРАВЛЕНО: Собираем данные из таблицы независимо от порядка строк
     paths = []
     sizes = []
     for i in range(2):
