@@ -51,6 +51,7 @@ def _hash_stage(
     lock: threading.Lock,
     progress_cb: Optional[ProgressCb],
     stage_name: str,
+    algorithm="sha256",
 ):  # -> dict[str, list[Path]]:
 
     by_hash: dict[str, list[Path]] = defaultdict(list)
@@ -62,7 +63,7 @@ def _hash_stage(
             return path, None
 
         if not quick:
-            cached = cache.get(path, st.st_size, st.st_mtime)
+            cached = cache.get(path, st.st_size, st.st_mtime, algorithm)
             if cached:
                 with lock:
                     done_ref[0] += st.st_size
@@ -76,9 +77,11 @@ def _hash_stage(
                 if progress_cb and done_ref[0] % (1 << 20) < n:
                     progress_cb(stage_name, done_ref[0], total_ref[0])
 
-        h = hash_file(path, quick=quick, progress_cb=on_chunk)
+        h = hash_file(
+            path, algorithm=algorithm, quick=quick, progress_cb=on_chunk
+        )
         if h and not quick:
-            cache.put(path, st.st_size, st.st_mtime, h)
+            cache.put(path, st.st_size, st.st_mtime, algorithm, h)
         return path, h
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
@@ -96,6 +99,7 @@ def find_duplicates(
     include_empty: bool = False,
     use_cache: bool = True,
     workers: int = DEFAULT_HASH_WORKERS,
+    algorithm="sha256",
 ):  # -> dict[str, list[Path]]:
     """Трехступенчатый поиск точных дубликатов: размер → быстрый хеш → полный хеш."""
     by_size: dict[int, list[Path]] = defaultdict(list)
@@ -134,6 +138,7 @@ def find_duplicates(
             lock,
             progress_cb,
             "quick_hash",
+            algorithm=algorithm,
         )
         candidates = [f for g in by_quick.values() if len(g) > 1 for f in g]
         if not candidates:
@@ -155,6 +160,7 @@ def find_duplicates(
             lock,
             progress_cb,
             "full_hash",
+            algorithm=algorithm,
         )
         for h, paths in by_full.items():
             if len(paths) > 1:

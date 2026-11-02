@@ -54,6 +54,7 @@ class ScanWorker(QThread):
         mode,
         globs,
         phash,
+        algorithm="sha256",
         target_file=None,
     ):
         super().__init__()
@@ -67,6 +68,7 @@ class ScanWorker(QThread):
         self.mode = mode
         self.globs = globs
         self.phash = phash
+        self.algorithm = algorithm
         self.target_file = Path(target_file) if target_file else None
         self._is_cancelled = False
 
@@ -116,6 +118,7 @@ class ScanWorker(QThread):
                     self.include_empty,
                     self.use_cache,
                     DEFAULT_HASH_WORKERS,
+                    algorithm=self.algorithm,
                 )
             elif self.mode == "similar_img":
                 res = find_similar_images(files, self.phash)

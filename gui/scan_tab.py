@@ -123,6 +123,15 @@ class ScanTab(QWidget):
         self.mode_combo.addItem("🔗 Поиск ссылок (Links)", "links")
         self.mode_combo.currentIndexChanged.connect(self._mode_changed)
 
+        self.algorithm_combo = QComboBox()
+        self.algorithm_combo.addItem("xxHash (Самый быстрый)", "xxhash")
+        self.algorithm_combo.addItem("MD5 (Стандартный)", "md5")
+        self.algorithm_combo.addItem("SHA-256 (Надёжный)", "sha256")
+
+        mode_row.addWidget(QLabel("Алгоритм:"))
+        mode_row.addWidget(self.algorithm_combo)
+        mode_row.addSpacing(16)
+
         self.phash_lbl = QLabel("Порог:")
         self.phash_lbl.hide()
         self.phash_slider = QSlider(Qt.Horizontal)
@@ -385,6 +394,7 @@ class ScanTab(QWidget):
             self.mode_combo.currentData(),
             globs,
             self.phash_slider.value(),
+            algorithm=self.algorithm_combo.currentData(),
             target_file=target_file,
         )
         self.worker.progress_msg.connect(self.status.setText)

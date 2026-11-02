@@ -333,7 +333,7 @@ def test_on_chunk_progress_callback_trigger(tmp_path, mocker):
     f2.write_text("12345")
 
     # Мокаем hash_file, чтобы он вызывал переданный ему progress_cb (on_chunk)
-    def mock_hash_file(path, quick, progress_cb):
+    def mock_hash_file(path, quick, progress_cb, **kwargs):
         if progress_cb:
             progress_cb(2 * 1024 * 1024)  # Вызываем с 2 МБ
         return "hash123"

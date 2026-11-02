@@ -4,6 +4,7 @@ import hashlib
 import logging
 from pathlib import Path
 from typing import Callable, Optional
+import xxhash
 
 from utils.config import CHUNK_SIZE, QUICK_HASH_BYTES
 
@@ -27,7 +28,11 @@ def hash_file(
     :param progress_cb: Функция обратного вызова, принимает количество прочитанных байт.
     :return: Hex-строка хеша или None в случае ошибки чтения.
     """
-    h = hashlib.new(algorithm)
+    if algorithm == "xxhash":
+        h = xxhash.xxh64()
+    else:
+        h = hashlib.new(algorithm)
+
     try:
         with open(path, "rb") as f:
             if quick:

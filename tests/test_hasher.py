@@ -148,3 +148,12 @@ def test_hash_file_md5(tmp_path):
     result = hash_file(file_path, algorithm="md5")
 
     assert result == expected
+
+
+def test_hash_file_xxhash(tmp_path):
+    content = b"Hello xxHash"
+    file_path = tmp_path / "test.txt"
+    file_path.write_bytes(content)
+    result = hash_file(file_path, algorithm="xxhash")
+    assert result is not None
+    assert len(result) == 16  # xxh64 возвращает 64-битный хеш (16 символов)

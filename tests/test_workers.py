@@ -395,7 +395,7 @@ def test_scan_worker_progress_cb(mocker):
     mocker.patch("core.workers.scan_directory", return_value=[Path("f1")])
 
     # Имитируем, что find_duplicates вызывает коллбэк, чтобы отработали строки с eta
-    def mock_find(files, cb, *args):
+    def mock_find(files, cb, *args, **kwargs):
         cb("quick_hash", 10, 100)
         return {}
 
