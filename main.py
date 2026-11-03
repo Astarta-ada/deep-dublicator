@@ -6,13 +6,14 @@ from pathlib import Path
 import datetime
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QIcon
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from utils.logging_setup import setup_logging
 from utils.settings import _settings
 from gui.main_window import MainWindow
 from gui.theme_manager import ThemeManager
-from utils.config import APP_NAME, ORG_NAME
+from utils.config import APP_NAME, ORG_NAME, get_resource_path
 
 
 def _run_cli():
@@ -66,6 +67,8 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(ORG_NAME)
+    icon_path = get_resource_path("assets/logo.png")
+    app.setWindowIcon(QIcon(str(icon_path)))
 
     # Применяем сохраненную тему оформления
     ThemeManager.instance().apply_saved()

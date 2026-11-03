@@ -1,0 +1,13 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Сама лупа (толстый контур) -->
+  <circle cx="28" cy="28" r="18" fill="none" stroke="#3b82f6" stroke-width="8"/>
+  
+  <!-- Ручка лупы (толстая линия) -->
+  <line x1="41" y1="41" x2="56" y2="56" stroke="#3b82f6" stroke-width="10" stroke-linecap="round"/>
+  
+  <!-- Мини-папка внутри (чтобы было понятно, что это поиск файлов) -->
+  <path d="M 20 22 L 26 22 L 28 26 L 36 26 L 36 34 L 20 34 Z" fill="#3b82f6"/>
+  
+  <!-- Блик на стекле (для объема) -->
+  <path d="M 18 28 A 10 10 0 0 1 28 18" stroke="#60a5fa" stroke-width="3" stroke-linecap="round" fill="none"/>
+</svg>

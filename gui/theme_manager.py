@@ -3,10 +3,16 @@
 import logging
 
 from PySide6.QtCore import QSettings, QObject, Signal
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from gui.theme import THEMES, DEFAULT_THEME, build_stylesheet
-from utils.config import ORG_NAME, APP_NAME, SETTINGS_THEME_KEY
+from utils.config import (
+    ORG_NAME,
+    APP_NAME,
+    SETTINGS_THEME_KEY,
+    get_resource_path,
+)
 
 log = logging.getLogger(__name__)
 
@@ -53,15 +59,21 @@ class ThemeManager(QObject):
             log.error("QApplication не создан — тема не применена")
             return
 
-        # Применяем стили
+        # 1. Применяем стили (один раз)
         app.setStyleSheet(build_stylesheet(theme_key))
         self._current = theme_key
 
-        # Сохраняем в настройки
+        # 2. Обновляем иконку главного окна
+        # (Используем logo.svg, так как он адаптивный через currentColor)
+        icon_path = get_resource_path("assets/logo.svg")
+        if icon_path.exists():
+            app.setWindowIcon(QIcon(str(icon_path)))
+
+        # 3. Сохраняем в настройки
         self._settings.setValue(SETTINGS_THEME_KEY, theme_key)
         log.info("Тема применена: %s", theme_key)
 
-        # Оповещаем подписчиков (например, если нужно перерисовать кастомные виджеты)
+        # 4. Оповещаем подписчиков
         self.theme_changed.emit(theme_key)
 
     def apply_saved(self) -> None:

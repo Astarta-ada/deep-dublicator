@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from PySide6.QtGui import QAction, QActionGroup
+from PySide6.QtGui import QAction, QActionGroup, QIcon
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -31,7 +31,13 @@ from gui.log_handler import QtLogHandler
 
 
 from utils import settings as user_settings
-from utils.config import APP_NAME, APP_VERSION, AUTOSAVE_FILE, ORG_NAME
+from utils.config import (
+    APP_NAME,
+    APP_VERSION,
+    AUTOSAVE_FILE,
+    ORG_NAME,
+    get_resource_path,
+)
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +69,8 @@ class MainWindow(QMainWindow):
         self.tray_timer = QTimer(self)
         self.tray_timer.timeout.connect(self._spin_tray)
         self.tray_spin_state = False
+
+        self.setWindowIcon(QIcon(str(get_resource_path("assets/logo.svg"))))
 
         self._build_ui()
         self._build_tray()
@@ -130,7 +138,8 @@ class MainWindow(QMainWindow):
 
     def _build_tray(self):
         self.tray = QSystemTrayIcon(self)
-        self.tray.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
+        self.tray_icon = QIcon(str(get_resource_path("assets/tray_icon.svg")))
+        self.tray.setIcon(self.tray_icon)
         self.tray.setToolTip(APP_NAME)
 
         tray_menu = QMenu()
@@ -193,9 +202,7 @@ class MainWindow(QMainWindow):
         """Управление спиннером в трее"""
         self.tray_spin_state = not self.tray_spin_state
         if self.tray_spin_state:
-            self.tray.setIcon(
-                self.style().standardIcon(QStyle.SP_BrowserReload)
-            )
+            self.tray.setIcon(self.tray_icon)
         else:
             self.tray.setIcon(
                 self.style().standardIcon(QStyle.SP_ComputerIcon)
@@ -206,7 +213,7 @@ class MainWindow(QMainWindow):
 
     def stop_tray_spinner(self):
         self.tray_timer.stop()
-        self.tray.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
+        self.tray.setIcon(self.tray_icon)
 
     def notify(self, title, message):
         """Уведомление в системном трее."""
