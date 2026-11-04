@@ -131,9 +131,19 @@ def find_duplicates(
     cache = HashCache() if use_cache else _NoCache()
     lock = threading.Lock()
     done = [0]
+
+    def _total_size(paths):
+        total = 0
+        for f in paths:
+            try:
+                total += f.stat().st_size
+            except OSError:
+                continue
+            return total
+
     try:
         # Этап 1: Быстрый хеш
-        total_q = sum(f.stat().st_size for f in candidates if f.exists())
+        total_q = _total_size(candidates)
         total_ref = [total_q]
         if progress_cb:
             progress_cb("quick_hash", 0, total_q, "")
@@ -155,7 +165,7 @@ def find_duplicates(
 
         # Этап 2: Полный хеш
         done[0] = 0
-        total_f = sum(f.stat().st_size for f in candidates if f.exists())
+        total_f = _total_size(candidates)
         total_ref[0] = total_f
         if progress_cb:
             progress_cb("full_hash", 0, total_f, "")

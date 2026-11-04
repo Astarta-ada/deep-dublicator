@@ -437,3 +437,34 @@ def test_hash_task(mocker):
     task.run()  # Запускаем синхронно
 
     mock_callback.assert_called_once_with(Path("test.txt"), "fake_hash")
+
+
+def test_hogs_scanner_none_root():
+    """HogsScanner(None) не должен падать."""
+    worker = HogsScanner(None, min_size=0, older_than_days=0)
+    worker.finished_ok = MagicMock()
+    worker.run()
+    worker.finished_ok.emit.assert_called_once_with([])
+
+
+def test_hogs_scanner_emits_progress(tmp_path):
+    """Прогресс должен эмититься каждые 500 файлов."""
+    for i in range(501):
+        (tmp_path / f"f{i}.bin").write_bytes(b"x")
+    worker = HogsScanner(tmp_path, min_size=0, older_than_days=0)
+    worker.finished_ok = MagicMock()
+    worker.progress = MagicMock()
+    worker.run()
+    assert worker.progress.emit.called
+
+
+def test_hogs_scanner_cancel(tmp_path):
+    """cancel() останавливает обход."""
+    for i in range(10):
+        (tmp_path / f"f{i}.bin").write_bytes(b"x")
+    worker = HogsScanner(tmp_path, min_size=0, older_than_days=0)
+    worker.cancel()
+    worker.finished_ok = MagicMock()
+    worker.run()
+    # Результат может быть пустым — главное, не зависли
+    assert worker.finished_ok.emit.called

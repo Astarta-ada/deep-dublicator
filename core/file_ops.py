@@ -102,11 +102,13 @@ def _safe_create_link(
 
     size = duplicate.stat().st_size
     tmp_name = duplicate.with_name(f"{duplicate.name}.tmp_link")
+    bak_name = duplicate.with_name(f"{duplicate.name}.bak_link")
 
     # Удаляем старый временный файл, если остался от предыдущих сбоев
-    if tmp_name.exists() or tmp_name.is_symlink():
-        tmp_name.unlink()
-
+    for stale in (tmp_name, bak_name):
+        if stale.exists() or stale.is_symlink():
+            stale.unlink()
+    # 1. Создаём ссылку во временном имени
     try:
         if link_type == "Symlink":
             _check_symlink_rights()
@@ -117,20 +119,48 @@ def _safe_create_link(
             raise ValueError(f"Неизвестный тип ссылки: {link_type}")
     except OSError as e:
         log.error("Не удалось создать %s: %s", link_type, e)
+        if tmp_name.exists() or tmp_name.is_symlink():
+            tmp_name.unlink()
         raise OSError(
             f"Ошибка создания {link_type} (возможно, файлы на разных дисках): {e}"
         )
 
-    # Если ссылка создана успешно, удаляем дубликат и переименовываем временный файл
+    # 2. Атомарная подмена: rename → rename. Если второй шаг упал — откатываем.
     try:
-        duplicate.unlink()
-        tmp_name.rename(duplicate)
-        log.info("%s: %s → %s", link_type, duplicate, target)
-        log_action(link_type.lower(), str(duplicate), size)
+        duplicate.rename(bak_name)
     except Exception as e:
         if tmp_name.exists() or tmp_name.is_symlink():
-            tmp_name.unlink()  # Откатываем изменения
+            tmp_name.unlink()
+        raise OSError(f"Не удалось переименовать дубликат: {e}")
+
+    try:
+        tmp_name.rename(duplicate)
+    except Exception as e:
+        # Откат: возвращаем оригинальный дубликат на место
+        try:
+            bak_name.rename(duplicate)
+        except Exception:
+            log.critical(
+                "Не удалось откатить замену. Бэкап: %s, ссылка: %s",
+                bak_name,
+                tmp_name,
+            )
+        try:
+            if tmp_name.exists() or tmp_name.is_symlink():
+                tmp_name.unlink()
+        except OSError:
+            pass
+
         raise OSError(f"Не удалось завершить замену: {e}")
+
+    # 3. Успех — удаляем страховочный бэкап
+    try:
+        bak_name.unlink()
+    except OSError:
+        pass
+
+    log.info("%s: %s → %s", link_type, duplicate, target)
+    log_action(link_type.lower(), str(duplicate), size)
 
 
 def replace_with_symlink(
@@ -169,11 +199,10 @@ def move_to_backup(
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     shutil.move(str(duplicate), str(dest))
-    # Сохраняем метаданные (куда переместили)
     meta = json.dumps({"backup_path": str(dest)})
 
     log.info("Перемещено в бэкап: %s → %s", duplicate, dest)
-    log_action("backup", str(duplicate), size)
+    log_action("backup", str(duplicate), size, meta=meta)
 
 
 def rename_duplicates(
@@ -195,7 +224,7 @@ def rename_duplicates(
             size = dup.stat().st_size
             dup.rename(new_name)
             meta = json.dumps({"new_path": str(new_name)})
-            log_action("rename", str(dup), size)
+            log_action("rename", str(dup), size, meta=meta)
             ok += 1
         except Exception as e:
             log.exception("Ошибка переименования %s", dup)

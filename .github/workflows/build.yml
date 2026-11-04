@@ -2,128 +2,226 @@ name: Build & Test
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
-  
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: '3.12'
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
+  # ==========================================
+  # 1. ТЕСТЫ (на всех 3 ОС)
+  # ==========================================
+  test:
+    name: 🧪 Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: 🐧 Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 libgl1 libxkbcommon-x11-0 \
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 \
+            libosmesa6 mesa-utils libxcb-shape0 libxcb-cursor0
+
+      - name: 📦 Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: ✅ Verify imports
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -c "import PySide6, PIL, pillow_heif, pypdfium2, rawpy, cv2, mutagen; print('All imports OK')"
+
+      - name: 🧪 Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest tests/ -q
+
+  # ==========================================
+  # 2. СБОРКА + УПАКОВКА (на всех 3 ОС)
+  # ==========================================
+  build:
+    name: 🏗️ Build (${{ matrix.os }})
+    needs: test
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            pyinstaller_args: --icon "assets/logo.ico" --add-data "assets;assets" --add-data "cli;cli" --add-data "core;core" --add-data "gui;gui" --add-data "utils;utils"
+            artifact_name: DeepDublicator-Windows
+            artifact_ext: zip
+            separator: ';'
+            pyinstaller_icon: '--icon "assets/logo.ico"'
           - os: ubuntu-latest
-            pyinstaller_args: --add-data "assets:assets" --add-data "cli:cli" --add-data "core:core" --add-data "gui:gui" --add-data "utils:utils"
+            artifact_name: DeepDublicator-Linux
+            artifact_ext: tar.gz
+            separator: ':'
+            pyinstaller_icon: ''
           - os: macos-latest
-            pyinstaller_args: --add-data "assets:assets" --add-data "cli:cli" --add-data "core:core" --add-data "gui:gui" --add-data "utils:utils"
+            artifact_name: DeepDublicator-macOS
+            artifact_ext: zip
+            separator: ':'
+            pyinstaller_icon: '--icon "assets/logo.icns"'
 
     steps:
-    - name: 📥 Checkout repository
-      uses: actions/checkout@v4
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
 
-    - name: 🏷️ Extract Version
-      id: get_version
-      shell: bash
-      run: |
-        VERSION=$(grep '^APP_VERSION = ' utils/config.py | cut -d '"' -f 2)
-        echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
-        echo "Собираем версию: $VERSION"
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
-    - name: 🐍 Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: 'pip'
+      - name: 🏷️ Extract version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(python - <<'PY'
+          import re, pathlib
+          text = pathlib.Path('utils/config.py').read_text(encoding='utf-8')
+          m = re.search(r'APP_VERSION\s*=\s*["\']([^"\']+)["\']', text)
+          print(m.group(1) if m else '0.0.0')
+          PY
+          )
+          echo "APP_VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Version: $VERSION"
 
-    - name: 🐧 Install Linux dependencies
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          libegl1 libgl1 libxkbcommon-x11-0 \
-          libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
-          libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 \
-          libosmesa6 mesa-utils libxcb-shape0 libxcb-cursor0
+      - name: 🐧 Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 libgl1 libxkbcommon-x11-0 \
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 \
+            libosmesa6 mesa-utils libxcb-shape0 libxcb-cursor0
 
-    - name: 📦 Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements-dev.txt
-        pip install pyinstaller
+      - name: 📦 Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
 
-    - name: ✅ Verify imports
-      env:
-        QT_QPA_PLATFORM: offscreen
-      run: |
-        python -c "import PySide6; import PIL; import pillow_heif; import pypdfium2; import rawpy; import cv2; import mutagen; print('Все зависимости импортированы успешно')"
+      - name: 🍎 Generate .icns for macOS
+        if: runner.os == 'macOS'
+        run: |
+          ICONSET=assets/logo.iconset
+          mkdir -p "$ICONSET"
+          for size in 16 32 64 128 256 512; do
+            sips -z $size $size assets/logo.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+            sips -z $((size * 2)) $((size * 2)) assets/logo.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+          done
+          iconutil -c icns "$ICONSET" -o assets/logo.icns
 
-    - name: 🧪 Run tests
-      env:
-        QT_QPA_PLATFORM: offscreen
-      run: |
-        pytest tests/ -q
+      - name: 🏗️ Build with PyInstaller
+        shell: bash
+        run: |
+          python -m PyInstaller --noconfirm --onedir --windowed --noupx \
+            --name "DeepDublicator" \
+            ${{ matrix.pyinstaller_icon }} \
+            --hidden-import "PIL" \
+            --hidden-import "pillow_heif" \
+            --hidden-import "pypdfium2" \
+            --hidden-import "rawpy" \
+            --hidden-import "cv2" \
+            --hidden-import "mutagen" \
+            --hidden-import "cli.cli" \
+            --add-data "assets${{ matrix.separator }}assets" \
+            --add-data "cli${{ matrix.separator }}cli" \
+            --add-data "core${{ matrix.separator }}core" \
+            --add-data "gui${{ matrix.separator }}gui" \
+            --add-data "utils${{ matrix.separator }}utils" \
+            main.py
 
-    - name: 🏗️ Build with PyInstaller
-      run: |
-        python -m PyInstaller --noconfirm --onedir --windowed --name "DeepDublicator" \
-          --hidden-import "PIL" \
-          --hidden-import "pillow_heif" \
-          --hidden-import "pypdfium2" \
-          --hidden-import "rawpy" \
-          --hidden-import "cv2" \
-          --hidden-import "mutagen" \
-          ${{ matrix.pyinstaller_args }} \
-          main.py
+      - name: 🗜️ Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/DeepDublicator" -DestinationPath "${{ matrix.artifact_name }}-v${{ steps.version.outputs.APP_VERSION }}.zip"
 
-    - name: 🗜️ Zip Artifact (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        cd dist
-        powershell Compress-Archive -Path DeepDublicator -DestinationPath "../DeepDublicator-Windows-v${{ env.APP_VERSION }}.zip"
+      - name: 🗜️ Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          tar -czvf "${{ matrix.artifact_name }}-v${{ steps.version.outputs.APP_VERSION }}.tar.gz" -C dist DeepDublicator
 
-    - name: 🗜️ Tar Artifact (Linux)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        cd dist
-        tar -czvf ../DeepDublicator-Linux-v${{ env.APP_VERSION }}.tar.gz DeepDublicator
+      - name: 🗜️ Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent dist/DeepDublicator.app "${{ matrix.artifact_name }}-v${{ steps.version.outputs.APP_VERSION }}.zip"
 
-    - name: 🗜️ Zip Artifact (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        cd dist
-        zip -r ../DeepDublicator-macOS-v${{ env.APP_VERSION }}.zip DeepDublicator.app
+      - name: 📤 Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-v${{ steps.version.outputs.APP_VERSION }}
+          path: ${{ matrix.artifact_name }}-v${{ steps.version.outputs.APP_VERSION }}.${{ matrix.artifact_ext }}
+          retention-days: 7
 
-    - name: 📤 Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: DeepDublicator-${{ matrix.os }}-v${{ env.APP_VERSION }}
-        path: DeepDublicator-*-v${{ env.APP_VERSION }}.*
-        retention-days: 7
+  # ==========================================
+  # 3. РЕЛИЗ (только при пуше тега v*)
+  # ==========================================
+  release:
+    name: 🚀 Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
 
-    - name: 🚀 Publish to GitHub Releases
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v2
-      with:
-        files: DeepDublicator-*-v${{ env.APP_VERSION }}.*
-        name: Release v${{ env.APP_VERSION }}
-        body: |
-          ## Deep Dublicator v${{ env.APP_VERSION }}
-          
-          Автоматическая сборка приложения для Windows, Linux и macOS.
-          
-          ### Что нового:
-          - Автоматические тесты пройдены успешно.
-          - Сборка с использованием PyInstaller.
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: 📥 Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: 🚀 Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          name: Deep Dublicator ${{ github.ref_name }}
+          body: |
+            ## Deep Dublicator ${{ github.ref_name }}
+
+            Автоматическая сборка приложения для Windows, Linux и macOS.
+
+            ### Установка
+
+            **Windows**
+            1. Распакуйте `DeepDublicator-Windows-*.zip`
+            2. Запустите `DeepDublicator.exe`
+
+            **Linux**
+            ```bash
+            tar -xzvf DeepDublicator-Linux-*.tar.gz
+            cd DeepDublicator
+            chmod +x DeepDublicator
+            ./DeepDublicator

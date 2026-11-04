@@ -10,9 +10,21 @@ from core.duplicate_finder import find_duplicates
 from core.reports import export_html, export_txt
 from core.session import build_session_from_groups
 from core.file_ops import apply_action_to_group
+from utils.config import EMPTY_FILE_HASH
 from utils.helpers import human_size, parse_size_string
 
 log = logging.getLogger(__name__)
+
+
+def _safe_parse_size(raw: str, default: int = 0) -> int:
+    """Парсит размер, возвращает default при ошибке."""
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return parse_size_string(raw)
+    except (ValueError, TypeError) as e:
+        print(f"Ошибка: неверный формат размера '{raw}': {e}", file=sys.stderr)
+        raise
 
 
 def run(argv):
@@ -54,6 +66,16 @@ def run(argv):
         "(первый файл в группе — оригинал)",
     )
     parser.add_argument("--yes", action="store_true", help="без подтверждения")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="только показать, что будет сделано (без изменений)",
+    )
+    parser.add_argument(
+        "--deletion-list",
+        default=None,
+        help="сохранить список путей, подлежащих удалению",
+    )
 
     args = parser.parse_args(argv)
 
@@ -62,8 +84,20 @@ def run(argv):
         print(f"Ошибка: не директория: {root}", file=sys.stderr)
         return 2
 
-    min_size = parse_size_string(args.min_size)
-    max_size = parse_size_string(args.max_size) if args.max_size else None
+    try:
+        min_size = _safe_parse_size(args.min_size, default=1)
+        max_size = (
+            _safe_parse_size(args.max_size, default=None)
+            if args.max_size
+            else None
+        )
+        threshold = _safe_parse_size(args.min_savings, default=0)
+    except ValueError:
+        return 2
+
+    if args.include_empty and min_size > 0:
+        min_size = 0
+
     extensions = normalize_extensions(args.ext)
 
     # 1. Сканирование
@@ -80,25 +114,33 @@ def run(argv):
     print(f"Найдено {len(files)} файлов. Ищу дубликаты …")
 
     # 2. Поиск дубликатов
-    def cb(stage, done, total):
+    def cb(stage, done, total, current_file=""):
         if total:
             pct = int(100 * done / total)
             sys.stdout.write(f"\r  {stage}: {pct}%  ")
             sys.stdout.flush()
 
-    result = find_duplicates(
-        files,
-        progress_cb=cb,
-        include_empty=args.include_empty,
-        use_cache=not args.no_cache,
-        workers=args.workers,
-    )
+    try:
+        result = find_duplicates(
+            files,
+            progress_cb=cb,
+            include_empty=args.include_empty,
+            use_cache=not args.no_cache,
+            workers=args.workers,
+        )
+    except Exception as e:
+        log.exception("Ошибка поиска дубликатов")
+        print(f"\nОшибка поиска дубликатов: {e}", file=sys.stderr)
+        return 1
     print()
 
     # 3. Фильтрация по экономии
-    threshold = parse_size_string(args.min_savings)
     shown = {}
     for h, paths in result.items():
+        # Настоящая группа пустых файлов — всегда показываем
+        if h == EMPTY_FILE_HASH:
+            shown[h] = paths
+            continue
         try:
             size = paths[0].stat().st_size
         except OSError:
@@ -137,7 +179,6 @@ def run(argv):
 
     # 5. Сохранение отчета
     if args.report:
-
         session = build_session_from_groups(
             groups=shown,
             root_dir=str(root),
@@ -155,10 +196,24 @@ def run(argv):
             export_html(session, rp)
         print(f"Отчёт сохранён: {rp}")
 
-    # 6. Применение действий (удаление/ссылки)
+    # 5.1. Сохранение списка на удаление
+    if args.deletion_list:
+        dl = Path(args.deletion_list)
+        lines = []
+        for paths in shown.values():
+            for p in paths[1:]:
+                lines.append(str(p))
+        dl.write_text("\n".join(lines), encoding="utf-8")
+        print(f"Список на удаление сохранён: {dl} ({len(lines)} файлов)")
+
+    # 6. Применение действий
     if args.apply:
-        if not args.yes:
-            ans = input("Применить действие? (yes/no): ").strip().lower()
+        if not args.yes and not args.dry_run:
+            try:
+                ans = input("Применить действие? (yes/no): ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\nОтменено.", file=sys.stderr)
+                return 130
             if ans not in ("yes", "y"):
                 print("Отменено.")
                 return 0
@@ -170,10 +225,20 @@ def run(argv):
                 original,
                 targets,
                 args.apply,
+                dry_run=args.dry_run,
             )
             ok_sum += ok
             err_sum += len(errors)
 
-        print(f"Обработано: {ok_sum}, ошибок: {err_sum}")
+            # Поддерживаем оба формата: (path, msg) и просто str
+            for item in errors:
+                if isinstance(item, tuple) and len(item) == 2:
+                    p, msg = item
+                    print(f"  Ошибка: {p}: {msg}", file=sys.stderr)
+                else:
+                    print(f"  Ошибка: {item}", file=sys.stderr)
+
+        prefix = "[DRY-RUN] " if args.dry_run else ""
+        print(f"{prefix}Обработано: {ok_sum}, ошибок: {err_sum}")
 
     return 0

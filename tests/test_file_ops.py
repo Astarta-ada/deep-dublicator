@@ -210,20 +210,38 @@ def test_safe_create_link_oserror(mocker, files):
 
 
 def test_safe_create_link_rollback(mocker, files):
-    """Покрывает откат изменений при ошибке переименования."""
+    """Покрывает откат: первый rename (dup→bak) ок, второй (tmp→dup) падает."""
     mocker.patch("os.path.samefile", return_value=False)
-    mocker.patch("os.link")
-    mocker.patch("pathlib.Path.rename", side_effect=Exception("Rename failed"))
 
-    # Имитируем, что временный файл существует, чтобы сработала строка отката (unlink)
-    mocker.patch("pathlib.Path.exists", return_value=True)
-    mock_unlink = mocker.patch("pathlib.Path.unlink")
+    # os.link создаёт реальный tmp-файл, чтобы откат имел что убирать
+    def fake_link(src, dst):
+        Path(dst).touch()
+
+    mocker.patch("os.link", side_effect=fake_link)
+
+    # Первый rename (duplicate → bak) — реальный, второй (tmp → duplicate) — падает.
+    orig_rename = Path.rename
+    calls = {"n": 0}
+
+    def mock_rename(self, target):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise Exception("Rename failed")
+        return orig_rename(self, target)
+
+    mocker.patch.object(Path, "rename", mock_rename)
 
     with pytest.raises(OSError, match="Не удалось завершить замену"):
         _safe_create_link(files[0], files[1], "Hardlink", dry_run=False)
 
-    # Проверяем, что откат (удаление) действительно был вызван
-    assert mock_unlink.called
+    # Дубликат восстановлен на месте после отката
+    assert files[1].exists()
+    # tmp_link убран
+    tmp_name = files[1].with_name(f"{files[1].name}.tmp_link")
+    assert not tmp_name.exists()
+    # bak_link тоже не остался висеть
+    bak_name = files[1].with_name(f"{files[1].name}.bak_link")
+    assert not bak_name.exists()
 
 
 def test_replace_wrappers(mocker, files):
@@ -500,3 +518,61 @@ def test_undo_action_dest_exists(tmp_path):
 
     with pytest.raises(FileExistsError):
         undo_action(1, "backup", str(orig), meta)
+
+
+def test_move_to_backup_passes_meta_to_log_action(tmp_path, mocker):
+    """Регресс: meta должна реально попасть в log_action (для Undo)."""
+    mock_log = mocker.patch("core.file_ops.log_action")
+    orig = tmp_path / "dup.txt"
+    orig.write_text("data")
+    backup_dir = tmp_path / "backup"
+    move_to_backup(backup_dir, orig, tmp_path, dry_run=False)
+
+    # Последний аргумент (meta) должен быть JSON с backup_path
+    args, kwargs = mock_log.call_args
+    meta = kwargs.get("meta") or (args[3] if len(args) > 3 else None)
+    assert meta is not None
+    assert "backup_path" in meta
+
+
+def test_rename_duplicates_passes_meta_to_log_action(tmp_path, mocker):
+    """Регресс: meta для rename должна попасть в log_action."""
+    mock_log = mocker.patch("core.file_ops.log_action")
+    orig = tmp_path / "a.txt"
+    dup = tmp_path / "b.txt"
+    orig.write_text("x")
+    dup.write_text("x")
+    rename_duplicates(orig, [dup], dry_run=False)
+
+    args, kwargs = mock_log.call_args
+    meta = kwargs.get("meta") or (args[3] if len(args) > 3 else None)
+    assert meta is not None
+    assert "new_path" in meta
+
+
+def test_undo_through_real_db(tmp_path, mocker):
+    """Интеграционный: move_to_backup → запись в БД → undo_action."""
+    mocker.patch("utils.history.APP_DATA_DIR", tmp_path)
+    mocker.patch("utils.history.DB_PATH", tmp_path / "history.db")
+    # log_action не мокаем — пусть пишет в реальную (временную) БД
+    from utils import history
+    from core.file_ops import move_to_backup, undo_action
+    import sqlite3
+
+    orig = tmp_path / "dup.txt"
+    orig.write_text("data")
+    backup = tmp_path / "backup"
+    move_to_backup(backup, orig, tmp_path, dry_run=False)
+    assert not orig.exists()
+
+    conn = sqlite3.connect(tmp_path / "history.db")
+    row = conn.execute(
+        "SELECT id, action, path, meta FROM actions ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+
+    action_id, action, path, meta = row
+    assert action == "backup"
+    assert meta is not None
+    assert undo_action(action_id, action, path, meta) is True
+    assert orig.exists()

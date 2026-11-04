@@ -228,3 +228,52 @@ def test_cli_apply_action_confirm_yes(
     res = run([str(mock_cli_env), "--apply", "delete"])
     assert res == 0
     assert mock_apply.called
+
+
+def test_cli_progress_cb_accepts_four_args(
+    mock_cli_env, mocker, capsys, tmp_path
+):
+    """Регресс: CLI-колбэк должен принимать 4 аргумента (stage, done, total, filename)."""
+    f1, f2 = tmp_path / "f1.txt", tmp_path / "f2.txt"
+    f1.write_text("data")
+    f2.write_text("data")
+
+    def mock_find(files, progress_cb, **kwargs):
+        if progress_cb:
+            # Имитируем реальный вызов из find_duplicates
+            progress_cb("quick_hash", 50, 100, "file.txt")
+            progress_cb("quick_hash", 100, 100, "file.txt")
+        return {"hash": [f1, f2]}
+
+    mocker.patch("cli.cli.find_duplicates", side_effect=mock_find)
+
+    res = run([str(mock_cli_env)])
+    assert res == 0
+    captured = capsys.readouterr()
+    assert "quick_hash: 50%" in captured.out
+    assert "quick_hash: 100%" in captured.out
+
+
+def test_cli_include_empty_resets_min_size(mocker, tmp_path):
+    """Регресс: --include-empty должен сбрасывать min_size в 0."""
+    mock_scan = mocker.patch("cli.cli.scan_directory", return_value=[])
+    mocker.patch("cli.cli.find_duplicates", return_value={})
+
+    d = tmp_path / "d"
+    d.mkdir()
+    run([str(d), "--include-empty"])
+
+    # Проверяем, что scan_directory получил min_size=0
+    _, kwargs = mock_scan.call_args
+    assert kwargs["min_size"] == 0
+
+
+def test_cli_invalid_size_returns_2(mocker, tmp_path, capsys):
+    """Неверный формат размера → код 2, без трейсбека."""
+    d = tmp_path / "d"
+    d.mkdir()
+    mocker.patch("cli.cli.parse_size_string", side_effect=ValueError("bad"))
+    res = run([str(d), "--min-size", "abc"])
+    assert res == 2
+    captured = capsys.readouterr()
+    assert "неверный формат размера" in captured.err

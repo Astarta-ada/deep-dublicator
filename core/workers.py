@@ -77,22 +77,26 @@ class ScanWorker(QThread):
 
     def run(self):
         try:
-            self.progress_msg.emit("Сканирование директории…")
-            is_links = self.mode == "links"
             if self._is_cancelled:
                 return
+            self.progress_msg.emit("Сканирование директории…")
+            is_links = self.mode == "links"
 
-            files = list(
-                scan_directory(
-                    self.root,
-                    self.recursive,
-                    self.min_size,
-                    self.max_size,
-                    self.extensions,
-                    exclude_globs=self.globs,
-                    include_links=is_links,
-                )
-            )
+            files = []
+            for f in scan_directory(
+                self.root,
+                self.recursive,
+                self.min_size,
+                self.max_size,
+                self.extensions,
+                exclude_globs=self.globs,
+                include_links=is_links,
+            ):
+                if self._is_cancelled:
+                    self.progress_msg.emit("Отменено.")
+                    return
+                files.append(f)
+
             self.progress_msg.emit(f"Найдено {len(files)} файлов. Анализ…")
 
             start = time.time()
@@ -234,7 +238,7 @@ class FolderScannerWorker(QThread):
                                     "mtime": st.st_mtime,
                                 }
                             )
-                    except PermissionError:
+                    except (PermissionError, OSError) as exc:
                         results.append(
                             {
                                 "name": e.name,
@@ -242,11 +246,15 @@ class FolderScannerWorker(QThread):
                                 "size": 0,
                                 "files": 0,
                                 "is_dir": True,
-                                "error": "Доступ закрыт",
+                                "error": f"Ошибка доступа: {exc}",
                             }
                         )
-        except Exception:
-            pass
+        except Exception as exc:
+            log.exception(
+                "FolderScannerWorker: не удалось просканировать %s",
+                self.path,
+            )
+            self.progress.emit(f"Ошибка: {exc}")
         results.sort(key=lambda x: x["size"], reverse=True)
         self.finished_ok.emit(results)
 
@@ -255,35 +263,56 @@ class HogsScanner(QThread):
     """Воркер для поиска больших файлов."""
 
     finished_ok = Signal(list)
+    progress = Signal(str)
 
     def __init__(self, root, min_size, older_than_days):
         super().__init__()
         self.root = root
         self.min_size = min_size
         self.older_than_days = older_than_days
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
 
     def run(self):
         results = []
+        if not self.root or not os.path.isdir(self.root):
+            self.finished_ok.emit(results)
+            return
         now = datetime.now().timestamp()
-        for dirpath, _, filenames in os.walk(self.root):
-            for f in filenames:
-                try:
-                    p = Path(dirpath) / f
-                    st = p.stat()
-                    if st.st_size >= self.min_size:
-                        if self.older_than_days > 0:
-                            days_old = (now - st.st_mtime) / (24 * 3600)
-                            if days_old < self.older_than_days:
-                                continue
-                        results.append(
-                            (
-                                str(p),
-                                st.st_size,
-                                format_date(st.st_mtime),
+        count = 0
+        try:
+            for dirpath, _, filenames in os.walk(self.root):
+                if self._is_cancelled:
+                    break
+                for f in filenames:
+                    if self._is_cancelled:
+                        break
+                    try:
+                        p = Path(dirpath) / f
+                        st = p.stat()
+                        if st.st_size >= self.min_size:
+                            if self.older_than_days > 0:
+                                days_old = (now - st.st_mtime) / (24 * 3600)
+                                if days_old < self.older_than_days:
+                                    continue
+                            results.append(
+                                (
+                                    str(p),
+                                    st.st_size,
+                                    format_date(st.st_mtime),
+                                )
                             )
-                        )
-                except OSError:
-                    pass
+                    except OSError:
+                        pass
+                    count += 1
+                    if count % 500 == 0:
+                        self.progress.emit(f"Обработано файлов: {count}")
+        except Exception as e:
+            log.exception("Ошибка сканирования больших файлов")
+            self.progress.emit(f"Ошибка: {e}")
+
         results.sort(key=lambda x: x[1], reverse=True)
         self.finished_ok.emit(results)
 
