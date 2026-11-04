@@ -109,11 +109,18 @@ def test_cli_finds_duplicates_and_prints(
 
 def test_cli_oserror_on_stat(mock_cli_env, mocker):
     """Проверяет обработку ошибки, если файл нельзя прочитать (stat падает)."""
+    real_stat = Path.stat
+
+    def fake_stat(self):
+        if self.name in ("ghost.txt", "ghost2.txt"):
+            raise OSError("Access denied")
+        return real_stat(self)
+
+    mocker.patch("pathlib.Path.stat", fake_stat)
     mocker.patch(
         "cli.cli.find_duplicates",
         return_value={"hash": [Path("ghost.txt"), Path("ghost2.txt")]},
     )
-    mocker.patch("pathlib.Path.stat", side_effect=OSError("Access denied"))
 
     res = run([str(mock_cli_env)])
     assert res == 0

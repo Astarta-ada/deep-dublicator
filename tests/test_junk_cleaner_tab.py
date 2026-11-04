@@ -228,12 +228,13 @@ def test_clean_error_handling(junk_tab, mocker):
 # ==========================================
 
 
-def test_drag_and_drop(junk_tab, mocker):
+def test_drag_and_drop(junk_tab, mocker, tmp_path):
+    mock_dir = tmp_path / "DropFolder"
+    mock_dir.mkdir()
     mocker.patch("gui.junk_cleaner_tab.JunkCleanerTab._scan")
-    mocker.patch("pathlib.Path.is_dir", return_value=True)
 
     mime_data = QMimeData()
-    mime_data.setUrls([QUrl.fromLocalFile("C:/DropFolder")])
+    mime_data.setUrls([QUrl.fromLocalFile(str(mock_dir))])
 
     drag_event = mocker.MagicMock()
     drag_event.mimeData.return_value = mime_data
@@ -243,7 +244,7 @@ def test_drag_and_drop(junk_tab, mocker):
     drop_event = mocker.MagicMock()
     drop_event.mimeData.return_value = mime_data
     junk_tab.dropEvent(drop_event)
-    assert junk_tab.path_edit.text() == "C:\\DropFolder"
+    assert junk_tab.path_edit.text() == str(mock_dir)
     assert junk_tab._scan.called
 
 

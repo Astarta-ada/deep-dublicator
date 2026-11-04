@@ -191,10 +191,13 @@ def test_del_error(hogs_tab, mocker):
 # ==========================================
 
 
-def test_drag_and_drop(hogs_tab, mocker):
-    mocker.patch("pathlib.Path.is_dir", return_value=True)
+def test_drag_and_drop(hogs_tab, mocker, tmp_path):
+    mock_dir = tmp_path / "DropFolder"
+    mock_dir.mkdir()
+    mocker.patch("gui.space_hogs_tab.SpaceHogsTab._start")
+
     mime_data = QMimeData()
-    mime_data.setUrls([QUrl.fromLocalFile("C:/DropFolder")])
+    mime_data.setUrls([QUrl.fromLocalFile(str(mock_dir))])
 
     drag_event = mocker.MagicMock()
     drag_event.mimeData.return_value = mime_data
@@ -203,9 +206,8 @@ def test_drag_and_drop(hogs_tab, mocker):
 
     drop_event = mocker.MagicMock()
     drop_event.mimeData.return_value = mime_data
-    mocker.patch("gui.space_hogs_tab.SpaceHogsTab._start")
     hogs_tab.dropEvent(drop_event)
-    assert hogs_tab.path_edit.text() == "C:\\DropFolder"
+    assert hogs_tab.path_edit.text() == str(mock_dir)
 
 
 def test_drag_enter_invalid(hogs_tab, mocker):

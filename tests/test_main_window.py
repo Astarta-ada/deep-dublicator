@@ -113,11 +113,10 @@ def test_jump_dups(qtbot, mock_main_window):
     qtbot.addWidget(window)
 
     window.sidebar.setCurrentRow(3)
-    # Передаем путь к папке, чтобы не зависеть от наличия файла на диске
     window._jump_dups("C:/test")
 
     assert window.sidebar.currentRow() == 0
-    window.scan_tab.path_edit.setText.assert_called_with("C:\\test")
+    window.scan_tab.path_edit.setText.assert_called_with(str(Path("C:/test")))
     window.scan_tab.mode_combo.setCurrentIndex.assert_called_with(0)
 
 

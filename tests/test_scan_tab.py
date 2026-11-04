@@ -424,10 +424,12 @@ def test_check_vt_404(scan_tab, mocker):
 # ==========================================
 
 
-def test_drag_and_drop(scan_tab, mocker):
-    mocker.patch("pathlib.Path.is_dir", return_value=True)
+def test_drag_and_drop(scan_tab, mocker, tmp_path):
+    mock_dir = tmp_path / "DropFolder"
+    mock_dir.mkdir()
+
     mime_data = QMimeData()
-    mime_data.setUrls([QUrl.fromLocalFile("C:/DropFolder")])
+    mime_data.setUrls([QUrl.fromLocalFile(str(mock_dir))])
 
     drag_event = mocker.MagicMock()
     drag_event.mimeData.return_value = mime_data
@@ -437,4 +439,4 @@ def test_drag_and_drop(scan_tab, mocker):
     drop_event = mocker.MagicMock()
     drop_event.mimeData.return_value = mime_data
     scan_tab.dropEvent(drop_event)
-    assert scan_tab.path_edit.text() == "C:\\DropFolder"
+    assert scan_tab.path_edit.text() == str(mock_dir)

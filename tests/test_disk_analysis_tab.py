@@ -314,7 +314,7 @@ def test_on_treemap_click(disk_tab, mocker):
     mock_start = mocker.patch("gui.disk_analysis_tab.DiskAnalysisTab._start")
 
     disk_tab._on_treemap_click("Windows")
-    assert disk_tab.path_edit.text() == "C:\\Windows"
+    assert disk_tab.path_edit.text() == str(Path("C:/") / "Windows")
     assert mock_start.called
 
 
@@ -355,11 +355,13 @@ def test_navigation(disk_tab, mocker):
     assert disk_tab.path_edit.text() == "C:/Windows"
 
 
-def test_drag_and_drop(disk_tab, mocker):
+def test_drag_and_drop(disk_tab, mocker, tmp_path):
+    mock_dir = tmp_path / "NewDrop"
+    mock_dir.mkdir()
     mocker.patch("gui.disk_analysis_tab.DiskAnalysisTab._start")
-    mocker.patch("pathlib.Path.is_dir", return_value=True)
+
     mime_data = QMimeData()
-    mime_data.setUrls([QUrl.fromLocalFile("C:/NewDrop")])
+    mime_data.setUrls([QUrl.fromLocalFile(str(mock_dir))])
 
     drag_event = mocker.MagicMock()
     drag_event.mimeData.return_value = mime_data
@@ -369,7 +371,7 @@ def test_drag_and_drop(disk_tab, mocker):
     drop_event = mocker.MagicMock()
     drop_event.mimeData.return_value = mime_data
     disk_tab.dropEvent(drop_event)
-    assert disk_tab.path_edit.text() == "C:\\NewDrop"
+    assert disk_tab.path_edit.text() == str(mock_dir)
 
 
 # ==========================================

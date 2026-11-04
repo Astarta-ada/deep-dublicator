@@ -300,16 +300,18 @@ def test_hogs_scanner(tmp_path):
     assert "big.bin" in args[0][0]
 
 
-def test_hogs_scanner_age_filter(mocker):
-    mocker.patch("os.walk", return_value=[("C:/", [], ["old.bin"])])
+def test_hogs_scanner_age_filter(mocker, tmp_path):
+    """На Linux Path('C:/') не существует — используем реальную tmp_path."""
+    (tmp_path / "old.bin").touch()
 
-    # Файл очень старый (10 лет назад)
+    mocker.patch("os.walk", return_value=[(str(tmp_path), [], ["old.bin"])])
+
     m = MagicMock()
     m.st_size = 2000
     m.st_mtime = 0.0
     mocker.patch("pathlib.Path.stat", return_value=m)
 
-    worker = HogsScanner(Path("C:/"), min_size=1000, older_than_days=365)
+    worker = HogsScanner(tmp_path, min_size=1000, older_than_days=365)
     worker.finished_ok = MagicMock()
     worker.run()
 

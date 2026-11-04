@@ -132,6 +132,9 @@ def test_check_symlink_rights_not_windows(mocker):
     _check_symlink_rights()  # Не должно быть исключений
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="Windows-only (ctypes.windll)"
+)
 def test_check_symlink_rights_windows_admin(mocker):
     """Покрывает успешную проверку прав на Windows."""
     mocker.patch("sys.platform", "win32")
@@ -139,6 +142,9 @@ def test_check_symlink_rights_windows_admin(mocker):
     _check_symlink_rights()  # Не должно быть исключений
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="Windows-only (ctypes.windll)"
+)
 def test_check_symlink_rights_windows_not_admin(mocker):
     """Покрывает выброс PermissionError."""
     mocker.patch("sys.platform", "win32")
@@ -148,6 +154,9 @@ def test_check_symlink_rights_windows_not_admin(mocker):
         _check_symlink_rights()
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="Windows-only (ctypes.windll)"
+)
 def test_check_symlink_rights_ctypes_error(mocker):
     """Покрывает except Exception при вызове ctypes (is_admin = False)."""
     mocker.patch("sys.platform", "win32")
@@ -267,7 +276,14 @@ def test_move_to_backup_dry_run(mocker, files, tmp_path):
 
 
 def test_move_to_backup_stat_error(mock_log_action, mocker, files, tmp_path):
-    mocker.patch("pathlib.Path.stat", side_effect=OSError)
+    real_stat = Path.stat
+
+    def fake_stat(self):
+        if self == files[1]:
+            raise OSError
+        return real_stat(self)
+
+    mocker.patch("pathlib.Path.stat", fake_stat)
     mocker.patch("shutil.move")
     move_to_backup(tmp_path, files[1], tmp_path, dry_run=False)
 

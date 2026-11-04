@@ -113,7 +113,6 @@ def test_get_resource_path_frozen_onedir(reload_config, mocker):
     """Проверяет путь ресурсов в режиме --onedir (sys._MEIPASS отсутствует)."""
     config = reload_config
 
-    # Имитируем EXE без _MEIPASS (режим --onedir)
     mocker.patch.object(sys, "frozen", True, create=True)
     mocker.patch.object(
         sys, "executable", "C:/App/DeepDublicator.exe", create=True
@@ -121,12 +120,13 @@ def test_get_resource_path_frozen_onedir(reload_config, mocker):
     if hasattr(sys, "_MEIPASS"):
         mocker.patch.object(sys, "_MEIPASS", None, create=True)
 
-    # Перезагружаем модуль, чтобы он пересчитал PROJECT_ROOT
-    importlib.reload(config)
+    # Важно: подменяем атрибут ФУНКЦИЕЙ, а не MagicMock —
+    # только тогда Python сбиндит self при вызове instance.resolve().
+    mocker.patch.object(Path, "resolve", lambda self, *a, **kw: self)
 
+    importlib.reload(config)
     path = config.get_resource_path("assets/icon.png")
 
-    # В режиме onedir ресурсы лежат рядом с EXE
     assert path == Path("C:/App") / "assets" / "icon.png"
 
 
