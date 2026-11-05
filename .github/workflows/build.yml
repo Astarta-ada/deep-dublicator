@@ -107,15 +107,13 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION=$(python - <<'PY'
-          import re, pathlib
-          text = pathlib.Path('utils/config.py').read_text(encoding='utf-8')
-          m = re.search(r'APP_VERSION\s*=\s*["\']([^"\']+)["\']', text)
-          print(m.group(1) if m else '0.0.0')
-          PY
-          )
-          echo "APP_VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+          VERSION=$(awk -F'"' '/^APP_VERSION = /{print $2; exit}' utils/config.py)
+          if [ -z "$VERSION" ]; then
+            echo "ERROR: APP_VERSION not found in utils/config.py" >&2
+            exit 1
+          fi
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "Version: $VERSION"
 
       - name: 🐧 Linux dependencies
