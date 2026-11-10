@@ -63,9 +63,7 @@ class TreeItem(QTreeWidgetItem):
 
 
 class PercentDelegate(QStyledItemDelegate):
-    """# ==========================================
-    # 2. Делегат для красивой отрисовки процентов
-    # =========================================="""
+    """Делегат для красивой отрисовки процентов (синяя полоска)."""
 
     def paint(self, painter, option, index):
         percent = index.data(Qt.UserRole)
@@ -108,27 +106,6 @@ class PercentDelegate(QStyledItemDelegate):
         painter.setFont(font)
         painter.drawText(option.rect, Qt.AlignCenter, f"{percent:.1f}%")
 
-        painter.restore()
-
-
-class PercentDelegate(QStyledItemDelegate):
-    """Делегат для красивой отрисовки процентов (синяя полоска)."""
-
-    def paint(self, painter, option, index):
-        percent = index.data(Qt.UserRole)
-        if percent is None:
-            return super().paint(painter, option, index)
-        painter.save()
-        if option.state & QStyle.State_Selected:
-            painter.fillRect(option.rect, option.palette.highlight())
-        opt = QStyleOptionProgressBar()
-        opt.rect = option.rect
-        opt.maximum = 100
-        opt.progress = int(percent)
-        opt.text = f"{percent:.1f}%"
-        opt.textVisible = True
-        opt.textAlignment = Qt.AlignCenter
-        QApplication.style().drawControl(QStyle.CE_ProgressBar, opt, painter)
         painter.restore()
 
 

@@ -139,7 +139,7 @@ def find_duplicates(
                 total += f.stat().st_size
             except OSError:
                 continue
-            return total
+        return total
 
     try:
         # Этап 1: Быстрый хеш
